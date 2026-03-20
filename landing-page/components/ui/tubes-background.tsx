@@ -32,9 +32,9 @@ export function TubesBackground({
       if (!canvasRef.current) return;
 
       try {
-        // Use dynamic import from CDN as per reference implementation
-        // @ts-ignore
-        const module = await import('https://cdn.jsdelivr.net/npm/threejs-components@0.0.19/build/cursors/tubes1.min.js');
+        // Use eval-based dynamic import so TypeScript does not try to resolve remote URL modules.
+        const remoteUrl = 'https://cdn.jsdelivr.net/npm/threejs-components@0.0.19/build/cursors/tubes1.min.js';
+        const module = await (0, eval)(`import(/* webpackIgnore: true */ "${remoteUrl}")`);
         const TubesCursor = module.default;
 
         if (!mounted) return;
