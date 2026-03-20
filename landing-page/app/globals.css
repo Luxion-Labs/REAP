@@ -33,6 +33,11 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
+  .hero-glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(32px);
+  }
+
   .bento-card {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -48,5 +53,19 @@
     background: rgba(8, 8, 8, 0.85);
     backdrop-filter: blur(24px);
     border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .demo-glass-btn {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(148, 163, 184, 0.12) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .demo-glass-btn:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(148, 163, 184, 0.16) 100%);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 14px 44px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   }
 }

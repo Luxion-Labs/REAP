@@ -98,6 +98,7 @@ export function TubesBackground({
         className="absolute inset-0 w-full h-full block"
         style={{ touchAction: 'none' }}
       />
+      <div className="absolute inset-0 bg-black/22" />
       
       {/* Content Overlay */}
       <div className="relative z-10 w-full h-full pointer-events-none">

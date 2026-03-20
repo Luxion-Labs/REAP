@@ -70,7 +70,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="frosted-glass rounded-[3rem] md:rounded-[5rem] p-12 md:p-24 max-w-6xl w-full flex flex-col items-center pointer-events-auto"
+              className="frosted-glass hero-glass rounded-[3rem] md:rounded-[5rem] p-12 md:p-24 max-w-6xl w-full flex flex-col items-center pointer-events-auto"
             >
               <h1 className="font-serif italic text-[clamp(48px,10vw,140px)] leading-[0.8] tracking-tighter mb-10">
                 Make Real Estate <br />
@@ -85,7 +85,7 @@ export default function Home() {
                 <button className="silver-btn w-full sm:w-auto px-12 py-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:scale-[1.05] active:scale-[0.95] transition-all">
                   Join Waitlist <ArrowRight className="w-5 h-5" />
                 </button>
-                <button className="w-full sm:w-auto px-12 py-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest border border-white/20 hover:bg-white/5 hover:scale-[1.05] active:scale-[0.95] transition-all">
+                <button className="w-full sm:w-auto px-12 py-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest demo-glass-btn hover:scale-[1.05] active:scale-[0.95] transition-all">
                   Try Demo
                 </button>
               </div>
@@ -118,8 +118,6 @@ export default function Home() {
               transition={{ delay: 1, duration: 1 }}
               className="absolute bottom-10 flex flex-col items-center gap-3 text-white/20 animate-pulse pointer-events-none"
             >
-              <MousePointer2 className="w-5 h-5" />
-              <span className="font-mono text-[8px] uppercase tracking-[0.4em]">Click to randomize neon</span>
             </motion.div>
           </div>
         </TubesBackground>
