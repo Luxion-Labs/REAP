@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-obsidian: #080808;
+  --color-silver: #E2E8F0;
+  --font-serif: var(--font-serif);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer utilities {
+  .silver-gradient-text {
+    background: linear-gradient(135deg, #F8FAFC 0%, #94A3B8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .silver-btn {
+    background: linear-gradient(135deg, #F8FAFC 0%, #94A3B8 100%);
+    color: #080808;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .silver-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+  }
+
+  .frosted-glass {
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .bento-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .bento-card:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .mobile-nav-blur {
+    background: rgba(8, 8, 8, 0.85);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
