@@ -13,12 +13,12 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#080808] text-white">
       {/* HEADER */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-12 py-8 w-[94vw] mx-auto">
-        <div className="flex items-center gap-4">
-          <div className="w-14 md:w-20 h-10 md:h-12 relative">
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between w-full max-w-[1400px] mx-auto px-4 sm:px-6 md:px-12 py-6 sm:py-8">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-12 sm:w-14 md:w-20 h-9 sm:h-10 md:h-12 relative">
             <LogoParticles />
           </div>
-          <span className="font-mono text-xs tracking-[0.4em] uppercase text-white/90">REAP</span>
+          <span className="font-mono text-[10px] sm:text-xs tracking-[0.4em] uppercase text-white/90">REAP</span>
         </div>
         
         <nav className="hidden md:flex items-center gap-10 bg-white/5 border border-white/10 rounded-full px-10 py-3 backdrop-blur-xl">
@@ -65,12 +65,12 @@ export default function Home() {
       {/* HERO SECTION */}
       <section className="relative w-full h-screen">
         <TubesBackground enableClickInteraction={true} className="h-full">
-          <div className="relative z-10 w-[92vw] h-full mx-auto flex flex-col items-center justify-center text-center pt-20">
+          <div className="relative z-10 w-full max-w-[1200px] h-full mx-auto flex flex-col items-center justify-center text-center pt-16 sm:pt-20 px-4 sm:px-6">
             <motion.div 
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="frosted-glass hero-glass rounded-[3rem] md:rounded-[5rem] p-12 md:p-24 max-w-6xl w-full flex flex-col items-center pointer-events-auto"
+              className="frosted-glass hero-glass rounded-[2rem] sm:rounded-[3rem] md:rounded-[5rem] p-8 sm:p-12 md:p-24 max-w-6xl w-full flex flex-col items-center pointer-events-auto"
             >
               <h1 className="font-serif italic text-[clamp(48px,10vw,140px)] leading-[0.8] tracking-tighter mb-10">
                 Make Real Estate <br />
@@ -124,8 +124,8 @@ export default function Home() {
       </section>
 
       {/* SECTION 1 - THE PROBLEM */}
-      <section id="problem" className="w-[90vw] mx-auto py-48 border-b border-white/10">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-24 items-start">
+      <section id="problem" className="w-full px-4 sm:px-6 lg:px-8 py-24 md:py-48 border-b border-white/10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 md:gap-24 items-start">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -133,7 +133,7 @@ export default function Home() {
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
           >
             <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-white/40 mb-8">01 / The Problem</h2>
-            <h3 className="font-serif italic text-6xl md:text-8xl leading-[0.85] tracking-tighter mb-10">
+            <h3 className="font-serif italic text-4xl sm:text-5xl md:text-6xl lg:text-8xl leading-[0.95] md:leading-[0.85] tracking-tighter mb-8 sm:mb-10">
               Trillions in value. <br/><span className="text-white/30">Locked.</span>
             </h3>
             <p className="font-sans text-xl text-white/60 mb-10 max-w-lg leading-relaxed font-light">
@@ -170,8 +170,8 @@ export default function Home() {
       </section>
 
       {/* SECTION 2 & 3 - THE SHIFT & THE GAP */}
-      <section className="w-[90vw] mx-auto py-48 border-b border-white/10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-32">
+      <section className="w-full px-4 sm:px-6 lg:px-8 py-24 md:py-48 border-b border-white/10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
           {/* The Shift */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -239,7 +239,7 @@ export default function Home() {
       </section>
 
       {/* SECTION 4 - THE SOLUTION (Bento Grid) */}
-      <section id="solution" className="w-[90vw] mx-auto py-48 border-b border-white/10">
+      <section id="solution" className="w-full px-4 sm:px-6 lg:px-8 py-24 md:py-48 border-b border-white/10">
         <motion.div 
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -248,7 +248,7 @@ export default function Home() {
           className="text-center mb-32"
         >
           <h2 className="font-mono text-[10px] uppercase tracking-[0.4em] text-white/40 mb-8">04 / The Solution</h2>
-          <h3 className="font-serif italic text-6xl md:text-8xl leading-[0.85] tracking-tighter mb-10">
+          <h3 className="font-serif italic text-4xl sm:text-5xl md:text-6xl lg:text-8xl leading-[0.95] md:leading-[0.85] tracking-tighter mb-8 sm:mb-10">
             REAP is real estate <br/>infrastructure.
           </h3>
           <p className="font-sans text-xl text-white/50 max-w-3xl mx-auto leading-relaxed font-light">
