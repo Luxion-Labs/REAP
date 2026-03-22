@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  bio                 String?
+  profilePicture      String?
+  banner              String?
+  name                String?
+  minecraftAuthToken  String               @default(cuid())
+  minecraftPlayerData Json?
+  myProperties        Property[]
+  requestedProperties PropertyRequests[]
+  role                Role                 @default(USER)
+  walletAddress       String?              @unique
+  marketplaceListings MarketplaceListing[]
+  bids                Bid[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+}
+
+model PropertyRequests {
+  id                String        @id @default(uuid())
+  entity            String
+  minecraftPlayerId String
+  status            RequestStatus @default(PENDING)
+  stage             RequestStage  @default(STAGE_1)
+  user              User?         @relation(fields: [userId], references: [id])
+  userId            String?
+  images            images[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model images {
+  id                 String            @id @default(uuid())
+  url                String
+  propertyRequests   PropertyRequests? @relation(fields: [propertyRequestsId], references: [id])
+  propertyRequestsId String?
+  property           Property?         @relation(fields: [propertyId], references: [id])
+  propertyId         String?
+}
+
+model Property {
+  id           String               @id @default(uuid())
+  name         String
+  description  String
+  documentId   String
+  type         PropertyType
+  location     String
+  value        Float
+  shares       Int
+  gallery      images[]
+  user         User?                @relation(fields: [userId], references: [id])
+  userId       String?
+  propertyId   String?              @unique
+  owner        String?
+  valuation    String?
+  locationHash String?
+  documentHash String?
+  status       PropertyStatus?      @default(ACTIVE)
+  listings     MarketplaceListing[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+}
+
+model MarketplaceListing {
+  id           String        @id @default(uuid())
+  listingId    String        @unique // On-chain listing ID
+  propertyId   String
+  property     Property      @relation(fields: [propertyDbId], references: [id])
+  propertyDbId String
+  seller       User          @relation(fields: [sellerId], references: [id])
+  sellerId     String
+  price        String
+  status       ListingStatus @default(ACTIVE)
+  expiresAt    DateTime
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  bids         Bid[]
+}
+
+model Bid {
+  id        String             @id @default(uuid())
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id])
+  listingId String
+  bidder    User               @relation(fields: [bidderId], references: [id])
+  bidderId  String
+  amount    String // Bid amount in smallest unit
+  status    BidStatus          @default(PENDING)
+  message   String? // Optional message from bidder
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+  EXPIRED
+}
+
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  INDUSTRIAL
+  LAND
+  MULTI_FAMILY
+  OFFICE_BUILDING
+  RETAIL
+  MIXED_USE
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RequestStage {
+  STAGE_1
+  STAGE_2
+  STAGE_3
+}
+
+enum PropertyStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+}
