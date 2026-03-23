@@ -1,0 +1,13 @@
+{
+	"servers": {
+		"my-mcp-server-63a67037": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"-y",
+				"midnight-mcp@latest"
+			]
+		}
+	},
+	"inputs": []
+}
