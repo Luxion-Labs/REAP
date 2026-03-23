@@ -1,5 +1,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
-const API_BASE_URL_FORMS = process.env.NEXT_PUBLIC_API_BASE_URL_FORMS || 'http://localhost:8000';
+const API_BASE_URL_FORMS = process.env.NEXT_PUBLIC_API_BASE_URL_FORMS || 'https://waitflow.onrender.com';
+const PROJECT_ID = '69c115bb66242e3801a36b50';
 
 import { AuthManager } from './auth';
 
@@ -63,22 +64,23 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const url = `${this.formsURL}${endpoint}`;
+    const url = `${this.formsURL.replace(/\/+$/, '')}${endpoint}`;
 
     const isNgrokHost = this.formsURL.includes('ngrok');
     const enableNgrokBypass = process.env.NEXT_PUBLIC_ENABLE_NGROK_BYPASS === 'true';
 
-    // options.headers can be several types (Headers, string[][], or Record).
-    // Normalize to a plain object for easy merging and conditional header insertion.
+    const authHeader = AuthManager.getAuthHeader();
     const headersInit: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...AuthManager.getAuthHeader(),
+      ...authHeader,
       ...(options.headers as Record<string, string>),
     };
 
-    // Only add the ngrok bypass header when explicitly enabled AND the target
-    // looks like an ngrok tunnel. This avoids unnecessary custom headers which
-    // can trigger CORS preflights or leak to unrelated backends.
+    // Add project ID for admin requests or if specifically requested
+    if (endpoint.includes('/admin') || endpoint.includes('/projects/')) {
+      headersInit['x-project-id'] = PROJECT_ID;
+    }
+
     if (enableNgrokBypass && isNgrokHost) {
       headersInit['ngrok-skip-browser-warning'] = '1';
     }
@@ -88,21 +90,32 @@ class ApiClient {
       ...options,
     };
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[ApiClient] Requesting: ${options.method || 'GET'} ${url}`);
+    }
+
     try {
       const response = await fetch(url, config);
-      const data = await response.json().catch(() => ({}));
+      const contentType = response.headers.get("content-type");
+      let data;
+      
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        data = await response.text().catch(() => ({}));
+      }
 
       return {
         success: response.ok,
         data: response.ok ? data : undefined,
-        message: data.message || data.error || `Request failed with status ${response.status}`,
+        message: data?.message || data?.error || `Request failed with status ${response.status}`,
         status: response.status,
       };
     } catch (error) {
       console.error('Forms API request failed:', error);
       return {
         success: false,
-        message: 'Network error. Please check your connection and try again.',
+        message: 'Network error or CORS issue. Please try again later.',
         status: 0,
       };
     }
@@ -110,7 +123,7 @@ class ApiClient {
 
   // Public endpoints
   async joinWaitlist(email: string): Promise<ApiResponse> {
-    return this.forms_request('/v1/public/waitlist', {
+    return this.forms_request('/v1/projects/reap/public/waitlist', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
@@ -122,7 +135,7 @@ class ApiClient {
     subject: string;
     message: string;
   }): Promise<ApiResponse> {
-    return this.forms_request('/v1/public/contact', {
+    return this.forms_request('/v1/projects/reap/public/contact', {
       method: 'POST',
       body: JSON.stringify(data),
     });

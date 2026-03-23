@@ -1,74 +1,111 @@
-// Wallet types and interfaces for multi-provider wallet integration
+/**
+ * Wallet types and interfaces for Midnight Network integration.
+ *
+ * Based on:
+ *   - DApp Connector API: https://docs.midnight.network/api-reference/dapp-connector
+ *   - Wallet SDK Guide: https://docs.midnight.network/sdks/official/wallet-developer-guide
+ *   - Mesh SDK Wallet: https://meshjs.dev/midnight/midnight-setup/wallet
+ */
 
-export type WalletProvider = 'metamask' | 'walletconnect' | 'lace' | 'midnight';
+// ─── Provider Types ──────────────────────────────────────────────────────────
+
+export type WalletProvider = 'lace' | 'midnight';
+
+// ─── Core Wallet State ───────────────────────────────────────────────────────
 
 export interface WalletState {
   isConnected: boolean;
+  isConnecting: boolean;
   address: string | null;
   provider: WalletProvider | null;
-  chainId?: string | number;
-  balance?: string;
-  isConnecting: boolean;
   error: string | null;
-  // Extended Midnight wallet state (from create-midnight-dapp)
-  walletState?: MidnightWalletState;
-  providerName?: string;
-  walletName?: string;
-  apiVersion?: string;
-  capabilities?: {
-    walletTransfer?: boolean;
-    coinEnum?: boolean;
-  };
+
+  // Midnight-specific state from walletAPI.state()
+  coinPublicKey: string | null;
+  encryptionPublicKey: string | null;
+
+  // Midnight three-token balances (from DApp Connector ConnectedAPI)
+  balances: MidnightBalances | null;
+
+  // Midnight addresses (Bech32m encoded)
+  addresses: MidnightAddresses | null;
+
+  // Service URIs from wallet config
+  serviceConfig: MidnightServiceConfig | null;
+
+  // Wallet metadata
+  walletName: string | null;
+  walletIcon: string | null;
+  apiVersion: string | null;
+  networkId: string | null;
 }
+
+// ─── Midnight Balances (Three-Token Model) ───────────────────────────────────
+
+/**
+ * Midnight uses three token types:
+ * - Unshielded: NIGHT tokens (transparent, UTxO-based)
+ * - Shielded: Privacy-preserving tokens using ZK proofs
+ * - DUST: Transaction fee token generated from registered NIGHT
+ *
+ * Balances are returned as Record<tokenType, amount> from the DApp Connector.
+ */
+export interface MidnightBalances {
+  /** Record<tokenType, amount> for unshielded tokens (NIGHT) */
+  unshielded: Record<string, string>;
+  /** Record<tokenType, amount> for shielded tokens */
+  shielded: Record<string, string>;
+  /** DUST balance information */
+  dust: {
+    cap: string;
+    balance: string;
+  } | null;
+}
+
+// ─── Midnight Addresses (Bech32m Encoded) ────────────────────────────────────
+
+/**
+ * Midnight address types with Bech32m encoding:
+ * - mn_addr / mn_addr_preprod: Unshielded payment addresses
+ * - mn_shield-addr / mn_shield-addr_preprod: Shielded addresses
+ * - mn_dust / mn_dust_preprod: DUST addresses
+ */
+export interface MidnightAddresses {
+  unshielded: string | null;
+  shielded: string | null;
+  dust: string | null;
+}
+
+// ─── Service Configuration ───────────────────────────────────────────────────
+
+export interface MidnightServiceConfig {
+  indexerUri: string;
+  indexerWsUri: string;
+  proverServerUri: string;
+}
+
+// ─── Wallet Configuration ────────────────────────────────────────────────────
 
 export interface WalletConfig {
   provider: WalletProvider;
   name: string;
   icon: string;
   description: string;
-  supportedChains?: string[];
-  isInstalled?: boolean;
 }
+
+// ─── Connection Result ───────────────────────────────────────────────────────
 
 export interface WalletConnectionResult {
   success: boolean;
   address?: string;
   error?: string;
   provider?: WalletProvider;
-  // Extended fields for detailed wallet state
-  walletState?: MidnightWalletState;
-  providerName?: string;
-  walletName?: string;
-  apiVersion?: string;
-  capabilities?: {
-    walletTransfer?: boolean;
-    coinEnum?: boolean;
-  };
+  coinPublicKey?: string;
+  encryptionPublicKey?: string;
 }
 
-export interface MidnightWalletState {
-  address: string;
-  addressLegacy?: string;
-  coinPublicKey: string;
-  coinPublicKeyLegacy?: string;
-  encryptionPublicKey: string;
-  encryptionPublicKeyLegacy?: string;
-  balance?: string;
-  balances?: Record<string, unknown>;
-  [key: string]: unknown;
-}
+// ─── Error Types ─────────────────────────────────────────────────────────────
 
-export interface MidnightWalletAPI {
-  state(): Promise<WalletState>;
-  submitTransaction(tx: Record<string, unknown>): Promise<string>;
-  isEnabled(): Promise<boolean>;
-  enable(): Promise<MidnightWalletAPI>;
-  walletName?: string;
-  apiVersion?: string;
-  providerName?: string;
-}
-
-// Error types
 export const WALLET_ERRORS = {
   NOT_INSTALLED: 'WALLET_NOT_INSTALLED',
   NOT_ENABLED: 'WALLET_NOT_ENABLED',
@@ -83,82 +120,16 @@ export const WALLET_ERRORS = {
 
 export type WalletErrorType = typeof WALLET_ERRORS[keyof typeof WALLET_ERRORS];
 
-// Wallet detection functions
-export interface WalletDetector {
-  isInstalled(): boolean;
-  getProvider(): Record<string, unknown> | null;
-  getName(): string;
-  getIcon(): string;
-}
+// ─── Network Configurations ─────────────────────────────────────────────────
 
-// Network configurations
-export interface NetworkConfig {
-  chainId: string | number;
-  name: string;
-  rpcUrl?: string;
-  blockExplorerUrl?: string;
-  nativeCurrency?: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-}
+export const MIDNIGHT_NETWORK_IDS = {
+  MAINNET: 'mainnet',
+  PREPROD: 'preprod',
+  PREVIEW: 'preview',
+  UNDEPLOYED: 'undeployed',
+} as const;
 
-// Cardano network config
-export const CARDANO_NETWORKS: Record<string, NetworkConfig> = {
-  mainnet: {
-    chainId: 1,
-    name: 'Cardano Mainnet',
-    blockExplorerUrl: 'https://cardanoscan.io',
-    nativeCurrency: {
-      name: 'ADA',
-      symbol: 'ADA',
-      decimals: 6,
-    },
-  },
-  testnet: {
-    chainId: 0,
-    name: 'Cardano Testnet',
-    blockExplorerUrl: 'https://preprod.cardanoscan.io',
-    nativeCurrency: {
-      name: 'tADA',
-      symbol: 'tADA',
-      decimals: 6,
-    },
-  },
-};
+export type MidnightNetworkId = typeof MIDNIGHT_NETWORK_IDS[keyof typeof MIDNIGHT_NETWORK_IDS];
 
-// Midnight network config
-export const MIDNIGHT_NETWORKS: Record<string, NetworkConfig> = {
-  testnet: {
-    chainId: 'midnight-testnet',
-    name: 'Midnight Testnet',
-    nativeCurrency: {
-      name: 'tDUST',
-      symbol: 'tDUST',
-      decimals: 8,
-    },
-  },
-};
-
-// Ethereum network config (for MetaMask)
-export const ETHEREUM_NETWORKS: Record<string, NetworkConfig> = {
-  mainnet: {
-    chainId: 1,
-    name: 'Ethereum Mainnet',
-    nativeCurrency: {
-      name: 'Ether',
-      symbol: 'ETH',
-      decimals: 18,
-    },
-  },
-  sepolia: {
-    chainId: 11155111,
-    name: 'Sepolia Testnet',
-    nativeCurrency: {
-      name: 'Sepolia Ether',
-      symbol: 'ETH',
-      decimals: 18,
-    },
-  },
-};
+// Default network for REAP
+export const DEFAULT_NETWORK_ID: MidnightNetworkId = 'preprod';
