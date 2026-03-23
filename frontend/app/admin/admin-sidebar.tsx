@@ -73,6 +73,8 @@ const settingsItems: NavItem[] = [
   },
 ]
 
+import { ReapLogo } from "@/components/custom/reap-logo"
+
 export function AdminSidebar() {
   const pathname = usePathname()
   const { state } = useSidebar()
@@ -94,26 +96,14 @@ export function AdminSidebar() {
       <SidebarHeader className="h-16 border-b border-slate-200 dark:border-slate-700">
         {isCollapsed ? (
           <div className="flex items-center justify-between gap-2 px-2">
-            <Image
-              src="https://ik.imagekit.io/mwhha64ay/Brickchain/black-trans-logo.png"
-              alt="BrickChain"
-              width={32}
-              height={32}
-              className="w-8 h-8 shrink-0"
-            />
+            <ReapLogo size={24} className="shrink-0" />
             <SidebarTrigger className="h-6 w-6" />
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3 px-8">
             <div className="flex items-center gap-3 flex-1 justify-center">
-              <Image
-                src="https://ik.imagekit.io/mwhha64ay/Brickchain/black-trans-logo.png"
-                alt="BrickChain"
-                width={40}
-                height={40}
-                className="w-10 h-10 shrink-0 dark:invert"
-              />
-              <span className="font-bold text-lg leading-tight text-slate-800 dark:text-slate-100">Admin</span>
+              <ReapLogo size={32} className="shrink-0" />
+              <span className="font-bold text-lg leading-tight text-slate-800 dark:text-slate-100 uppercase tracking-widest">REAP</span>
             </div>
             <SidebarTrigger />
           </div>

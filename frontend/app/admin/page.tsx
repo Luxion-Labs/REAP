@@ -1,9 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BarChart3, Users, MessageSquare, TrendingUp } from "lucide-react";
+import {
+  BarChart3,
+  Users,
+  MessageSquare,
+  TrendingUp,
+  Wallet,
+  ShieldCheck,
+  Landmark,
+  Zap
+} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiClient } from "@/lib/api";
+import { useWalletState } from "@/components/providers/wallet-provider";
 
 interface WaitlistApiResponse {
   status: string;
@@ -40,6 +50,8 @@ interface DashboardStats {
 }
 
 export default function AdminDashboard() {
+  const walletState = useWalletState();
+  const { isConnected, balances } = walletState;
   const [stats, setStats] = useState<DashboardStats>({
     totalWaitlist: 0,
     totalContacts: 0,
@@ -72,10 +84,10 @@ export default function AdminDashboard() {
         const contactData = contactApiData?.data || [];
         const totalContacts = Array.isArray(contactData) ? contactData.length : 0;
         const unreadContacts = Array.isArray(contactData)
-          ? contactData.filter((msg: ContactMessage) => msg.status === 'unread').length
+          ? contactData.filter(c => c.status !== 'read').length
           : 0;
 
-        // Get recent entries (last 5)
+        // Get recent items
         const recentWaitlist = Array.isArray(waitlistData)
           ? waitlistData.slice(-5).reverse()
           : [];
@@ -100,12 +112,19 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
+  // Helper: get first balance value from a token record
+  const getFirstBalance = (record: Record<string, string> | undefined): string => {
+    if (!record) return "0";
+    const values = Object.values(record);
+    return values.length > 0 ? values[0] : "0";
+  };
+
   return (
     <div className="w-full p-8 space-y-8 bg-slate-50 dark:bg-[#1a1a1a] text-slate-900 dark:text-slate-100">
       {/* Header */}
       <div>
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h2>
-        <p className="text-slate-600 dark:text-slate-400 mt-2">Welcome to the BrickChain admin panel</p>
+        <p className="text-slate-600 dark:text-slate-400 mt-2">Welcome to the REAP admin panel</p>
       </div>
 
       {/* Stats Grid */}
@@ -113,11 +132,11 @@ export default function AdminDashboard() {
         {/* Total Waitlist */}
         <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-900 dark:text-slate-100">Total Waitlist</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Waitlist</CardTitle>
             <Users className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-2xl font-bold">
               {loading ? "..." : stats.totalWaitlist}
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">People on waitlist</p>
@@ -127,11 +146,11 @@ export default function AdminDashboard() {
         {/* Contact Messages */}
         <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-900 dark:text-slate-100">Messages</CardTitle>
+            <CardTitle className="text-sm font-medium">Messages</CardTitle>
             <MessageSquare className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-2xl font-bold">
               {loading ? "..." : stats.totalContacts}
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Contact messages</p>
@@ -141,11 +160,11 @@ export default function AdminDashboard() {
         {/* Unread Messages */}
         <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-900 dark:text-slate-100">Unread</CardTitle>
+            <CardTitle className="text-sm font-medium">Unread</CardTitle>
             <TrendingUp className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-2xl font-bold">
               {loading ? "..." : stats.unreadContacts}
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Unread messages</p>
@@ -155,7 +174,7 @@ export default function AdminDashboard() {
         {/* System Status */}
         <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-900 dark:text-slate-100">Status</CardTitle>
+            <CardTitle className="text-sm font-medium">Status</CardTitle>
             <BarChart3 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </CardHeader>
           <CardContent>
@@ -164,6 +183,62 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Wallet Summary Section */}
+      {isConnected && (
+        <div className="space-y-4">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Wallet className="h-5 w-5" />
+            Wallet Summary
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Shielded Balance */}
+            <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Shielded Balance</CardTitle>
+                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold flex items-baseline gap-2">
+                  {getFirstBalance(balances?.shielded)}
+                  <span className="text-sm font-mono text-muted-foreground">NIGHT (s)</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 tracking-tight">ZK-proof privacy enabled</p>
+              </CardContent>
+            </Card>
+
+            {/* Unshielded Balance */}
+            <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Unshielded Balance</CardTitle>
+                <Landmark className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold flex items-baseline gap-2">
+                  {getFirstBalance(balances?.unshielded)}
+                  <span className="text-sm font-mono text-muted-foreground">NIGHT</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 tracking-tight">UTxO standard transparency</p>
+              </CardContent>
+            </Card>
+
+            {/* DUST Balance */}
+            <Card className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">DUST</CardTitle>
+                <Zap className="h-4 w-4 text-yellow-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold flex items-baseline gap-2">
+                  {balances?.dust?.balance || "0"}
+                  <span className="text-sm font-mono text-muted-foreground">DUST</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 tracking-tight">Required for ZK operations</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

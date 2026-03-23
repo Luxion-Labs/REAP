@@ -22,6 +22,9 @@ const jbMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'REAP | Real Estate Asset Protocol',
   description: 'Turn Real Estate Into Liquid Digital Assets',
+  icons: {
+    icon: '/icon.svg',
+  },
 };
 
 export default function RootLayout({
