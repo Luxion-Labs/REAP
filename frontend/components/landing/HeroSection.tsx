@@ -23,12 +23,12 @@ export default function HeroSection() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-6 w-full sm:w-auto">
-              <button className="silver-btn w-full sm:w-auto px-12 py-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:scale-[1.05] active:scale-[0.95] transition-all">
+              <a href="#waitlist" className="silver-btn w-full sm:w-auto px-12 py-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:scale-[1.05] active:scale-[0.95] transition-all">
                 Join Waitlist <ArrowRight className="w-5 h-5" />
-              </button>
-              <button className="w-full sm:w-auto px-12 py-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest demo-glass-btn hover:scale-[1.05] active:scale-[0.95] transition-all">
+              </a>
+              <a href="/admin" className="w-full sm:w-auto px-12 py-5 rounded-2xl font-mono text-xs font-bold uppercase tracking-widest demo-glass-btn hover:scale-[1.05] active:scale-[0.95] transition-all text-center">
                 Try Demo
-              </button>
+              </a>
             </div>
           </motion.div>
 
