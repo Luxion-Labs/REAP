@@ -1,162 +1,291 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
-import { MidnightAuthProvider, useMidnightAuth, useMidnightWallet } from '@uppzen/midnight-auth';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
+
+import type {
+  MidnightInitialAPI,
+  MidnightConnectedAPI,
+  MidnightWalletAPI,
+} from "@/types/midnight";
+
 import {
   WalletState,
-  WalletProvider as WalletProviderType,
   WalletConfig,
   WalletConnectionResult,
-  WALLET_ERRORS,
-  MidnightWalletState,
-} from '@/lib/wallet-types';
+  MidnightBalances,
+  MidnightAddresses,
+  MidnightServiceConfig,
+  DEFAULT_NETWORK_ID,
+} from "@/lib/wallet-types";
 
-// Wallet configurations
-const walletConfigs: Record<WalletProviderType, WalletConfig> = {
-  metamask: {
-    provider: 'metamask',
-    name: 'MetaMask',
-    icon: '🦊',
-    description: 'Connect to your MetaMask wallet',
-    supportedChains: ['ethereum', 'polygon', 'bsc'],
+import {
+  isWalletInstalled,
+  getPrimaryWalletProvider,
+  handleMidnightError,
+} from "@/lib/midnight-utils";
+
+// ─── Wallet Configurations ──────────────────────────────────────────────────
+
+const walletConfigs: WalletConfig[] = [
+  {
+    provider: "lace",
+    name: "Lace Wallet",
+    icon: "💎",
+    description: "Midnight-enabled Lace wallet (browser extension)",
   },
-  walletconnect: {
-    provider: 'walletconnect',
-    name: 'WalletConnect',
-    icon: '🔗',
-    description: 'Connect with WalletConnect protocol',
-    supportedChains: ['ethereum', 'polygon', 'bsc', 'solana'],
-  },
-  lace: {
-    provider: 'lace',
-    name: 'Lace Wallet',
-    icon: '💎',
-    description: 'Modern Cardano wallet with Midnight support',
-    supportedChains: ['cardano'],
-  },
-  midnight: {
-    provider: 'midnight',
-    name: 'Midnight Lace Wallet',
-    icon: '🌙',
-    description: 'Privacy-first wallet for Midnight Network',
-    supportedChains: ['midnight'],
-  },
-};
+];
+
+// ─── Context Type ────────────────────────────────────────────────────────────
 
 interface WalletContextType {
   state: WalletState;
   availableWallets: WalletConfig[];
-  connectWallet: (provider: WalletProviderType) => Promise<WalletConnectionResult>;
+  connectWallet: () => Promise<WalletConnectionResult>;
   disconnectWallet: () => Promise<void>;
-  switchNetwork: (chainId: string | number) => Promise<boolean>;
-  refreshBalance: () => Promise<void>;
+  refreshBalances: () => Promise<void>;
+  /** The Mesh/WalletAPI instance (initialized on demand or if standard) */
+  walletAPI: MidnightWalletAPI | null;
+  /** The DApp/ConnectedAPI instance */
+  connectedApi: MidnightConnectedAPI | null;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export { WalletContext };
 
-// Internal component that uses the @uppzen/midnight-auth hooks
-function WalletProviderInner({ children }: { children: React.ReactNode }) {
-  const { isConnected, isConnecting, walletState, error, connect, disconnect } = useMidnightAuth();
-  const { address, balance, provider, refreshBalance: walletRefreshBalance } = useMidnightWallet();
+// ─── Initial State ───────────────────────────────────────────────────────────
 
-  const availableWallets = Object.values(walletConfigs);
+const initialState: WalletState = {
+  isConnected: false,
+  isConnecting: false,
+  address: null,
+  provider: null,
+  error: null,
+  coinPublicKey: null,
+  encryptionPublicKey: null,
+  balances: null,
+  addresses: null,
+  serviceConfig: null,
+  walletName: null,
+  walletIcon: null,
+  apiVersion: null,
+  networkId: null,
+};
 
-  // Track if we've already refreshed balance for this connection
-  const hasRefreshedBalance = useRef(false);
+// ─── Provider Component ─────────────────────────────────────────────────────
 
-  // Compute state from @uppzen/midnight-auth hooks
-  const computedState = useMemo(() => {
-    // Note: Balance is not available via midnight-auth API
-    // Users must check balance directly in Lace wallet extension
-    const finalBalance = balance; // This will be null according to midnight-auth docs
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<WalletState>(initialState);
+  const [walletAPI, setWalletAPI] = useState<MidnightWalletAPI | null>(null);
+  const [connectedApi, setConnectedApi] = useState<MidnightConnectedAPI | null>(null);
+  const isAutoConnecting = useRef(false);
 
-    return {
-      isConnected,
-      address: address || null,
-      provider: (isConnected ? 'lace' : null) as WalletProviderType | null,
-      chainId: undefined,
-      balance: finalBalance || undefined, // Balance not available via API
-      isConnecting,
-      error: error || null,
-      // Extended wallet state for Midnight
-      walletState: walletState as MidnightWalletState || undefined,
-      providerName: provider || undefined,
-      walletName: 'Lace Wallet',
-      apiVersion: undefined,
-      capabilities: undefined,
-    };
-  }, [isConnected, isConnecting, address, balance, walletState, provider, error]);
-
-  // Auto-refresh balance when connected
-  useEffect(() => {
-    if (isConnected && walletRefreshBalance && !hasRefreshedBalance.current) {
-      hasRefreshedBalance.current = true;
-      walletRefreshBalance().then(() => {
-        // Balance refresh completed
-      }).catch((error) => {
-        console.error('WalletProvider: Balance refresh failed:', error);
-        hasRefreshedBalance.current = false; // Reset on failure
-      });
-    } else if (!isConnected) {
-      // Reset when disconnected
-      hasRefreshedBalance.current = false;
-    }
-  }, [isConnected, walletRefreshBalance]);
-
-  // Connect wallet function
-  const connectWallet = useCallback(async (providerType: WalletProviderType): Promise<WalletConnectionResult> => {
-    if (providerType !== 'lace' && providerType !== 'midnight') {
-      return { success: false, error: WALLET_ERRORS.UNKNOWN_ERROR };
-    }
-
+  // ── Fetch balances and addresses (DApp Connector pattern) ──────────────
+  const fetchWalletData = useCallback(async (api: MidnightConnectedAPI) => {
     try {
-      await connect();
-      // Wait a brief moment for hooks to update
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const [
+        shieldedBalancesRaw,
+        unshieldedBalancesRaw,
+        dustBalanceRaw,
+        shieldedAddresses,
+        unshieldedAddressResult,
+        dustAddressResult,
+        config,
+      ] = await Promise.all([
+        api.getShieldedBalances().catch(() => ({} as Record<string, bigint>)),
+        api.getUnshieldedBalances().catch(() => ({} as Record<string, bigint>)),
+        api.getDustBalance().catch(() => ({ balance: BigInt(0), cap: BigInt(0) })),
+        api.getShieldedAddresses().catch(() => ({ 
+          shieldedAddress: "", 
+          shieldedCoinPublicKey: "", 
+          shieldedEncryptionPublicKey: "" 
+        })),
+        api.getUnshieldedAddress().catch(() => ({ unshieldedAddress: "" })),
+        api.getDustAddress().catch(() => ({ dustAddress: "" })),
+        api.getConfiguration().catch(() => null),
+      ]);
 
-      return {
-        success: true,
-        address: address || '',
-        provider: 'lace',
-        walletState: walletState as MidnightWalletState || undefined,
+      const balances: MidnightBalances = {
+        shielded: Object.fromEntries(
+          Object.entries(shieldedBalancesRaw).map(([k, v]) => [k, String(v)])
+        ),
+        unshielded: Object.fromEntries(
+          Object.entries(unshieldedBalancesRaw).map(([k, v]) => [k, String(v)])
+        ),
+        dust: {
+          balance: String(dustBalanceRaw.balance),
+          cap: String(dustBalanceRaw.cap),
+        },
       };
-    } catch (error) {
-      console.error('WalletProvider: Connect failed:', error);
-      return { success: false, error: WALLET_ERRORS.CONNECTION_FAILED };
+
+      const addresses: MidnightAddresses = {
+        unshielded: unshieldedAddressResult.unshieldedAddress || null,
+        shielded: shieldedAddresses?.shieldedAddress || null,
+        dust: dustAddressResult.dustAddress || null,
+      };
+
+      setState((prev) => ({
+        ...prev,
+        balances,
+        addresses,
+        address: unshieldedAddressResult.unshieldedAddress || shieldedAddresses.shieldedAddress || prev.address,
+        coinPublicKey: shieldedAddresses.shieldedCoinPublicKey || prev.coinPublicKey,
+        encryptionPublicKey: shieldedAddresses.shieldedEncryptionPublicKey || prev.encryptionPublicKey,
+        networkId: config?.networkId || prev.networkId || DEFAULT_NETWORK_ID,
+      }));
+    } catch (err) {
+      console.warn("WalletProvider: Failed to fetch balance data:", err);
     }
-  }, [connect, address, walletState]);
-
-  // Disconnect wallet function
-  const disconnectWallet = useCallback(async () => {
-    await disconnect();
-  }, [disconnect]);
-
-  // Switch network (not supported by @uppzen/midnight-auth)
-  const switchNetwork = useCallback(async (): Promise<boolean> => {
-    return false; // Not supported
   }, []);
 
-  // Refresh balance function
-  const refreshBalanceCallback = useCallback(async () => {
-    if (walletRefreshBalance) {
-      try {
-        const refreshedBalance = await walletRefreshBalance();
-        console.log('WalletProvider: Manual balance refresh result:', refreshedBalance);
-      } catch (error) {
-        console.error('WalletProvider: Manual balance refresh failed:', error);
-      }
-    }
-  }, [walletRefreshBalance]);
+  // ── Connect wallet (Main Flow) ───────────────────────────────────────────
+  const connectWallet = useCallback(async (): Promise<WalletConnectionResult> => {
+    setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
+    try {
+      const walletSource = getPrimaryWalletProvider();
+      if (!walletSource) throw new Error("Lace Wallet not detected.");
+
+      console.log("WalletProvider: Initializing connection...");
+
+      // NOTE: We primarily use the DApp Connector Flow (connect). 
+      // The Mesh (enable) flow is often responsible for the onboarding redirect in Lace 
+      // if called before a standard connection is established.
+      
+      let walletAddress = "";
+      let coinPubKey = "";
+      let encPubKey = "";
+
+      // 1. DApp Connector Connection (The Modern Way)
+      // This provides addresses and balances reliably without onboarding redirects.
+      const connected = await walletSource.connect(DEFAULT_NETWORK_ID);
+      setConnectedApi(connected);
+      
+      const [shielded, unshielded] = await Promise.all([
+        connected.getShieldedAddresses(),
+        connected.getUnshieldedAddress()
+      ]);
+      
+      walletAddress = unshielded.unshieldedAddress || shielded.shieldedAddress;
+      coinPubKey = shielded.shieldedCoinPublicKey;
+      encPubKey = shielded.shieldedEncryptionPublicKey;
+      
+      await fetchWalletData(connected);
+
+      // 2. Initialize Mesh API (WalletAPI) SILENTLY if supported
+      // We only do this after connect() to avoid conflicting popups/onboarding issues.
+      if (typeof (walletSource as any).enable === 'function') {
+        try {
+          // Attempting a silent enable now that connect() has authorized the domain
+          const api = await walletSource.enable();
+          setWalletAPI(api);
+          console.log("WalletProvider: Mesh API initialized successfully");
+        } catch (e) {
+          console.warn("WalletProvider: Mesh integration skipped (silent enable failed)", e);
+        }
+      }
+
+      // Update services
+      let serviceConfig: MidnightServiceConfig | null = null;
+      try {
+        if (walletSource.serviceUriConfig) {
+          const uris = await walletSource.serviceUriConfig();
+          serviceConfig = {
+            indexerUri: uris.indexerUri,
+            indexerWsUri: uris.indexerWsUri,
+            proverServerUri: uris.proverServerUri,
+          };
+        }
+      } catch (e) {
+        console.warn("WalletProvider: serviceUriConfig not available");
+      }
+
+      setState((prev) => ({
+        ...prev,
+        isConnected: true,
+        isConnecting: false,
+        address: walletAddress,
+        coinPublicKey: coinPubKey,
+        encryptionPublicKey: encPubKey,
+        serviceConfig,
+        provider: "lace",
+        walletName: walletSource.name || "Lace Wallet",
+        walletIcon: walletSource.icon || "",
+        apiVersion: walletSource.apiVersion || "",
+        networkId: DEFAULT_NETWORK_ID,
+        error: null,
+      }));
+
+      sessionStorage.setItem("midnight_wallet_connected", "true");
+      return { success: true, address: walletAddress, provider: "lace" };
+
+    } catch (err) {
+      const errorMessage = handleMidnightError(err);
+      console.error("WalletProvider: Connection error:", err);
+      setState((prev) => ({ ...prev, isConnecting: false, error: errorMessage }));
+      return { success: false, error: errorMessage };
+    }
+  }, [fetchWalletData]);
+
+  // ── Disconnect wallet ──────────────────────────────────────────────────
+  const disconnectWallet = useCallback(async () => {
+    try {
+      const walletSource = getPrimaryWalletProvider();
+      if (walletSource?.disconnect) {
+        await walletSource.disconnect();
+      }
+    } catch (err) {
+      console.warn("WalletProvider: Disconnect call failed", err);
+    }
+    
+    setWalletAPI(null);
+    setConnectedApi(null);
+    setState(initialState);
+    sessionStorage.removeItem("midnight_wallet_connected");
+  }, []);
+
+  // ── Refresh balances ───────────────────────────────────────────────────
+  const refreshBalances = useCallback(async () => {
+    if (connectedApi) {
+      await fetchWalletData(connectedApi);
+    }
+  }, [connectedApi, fetchWalletData]);
+
+  // ── Auto-reconnect ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      sessionStorage.getItem("midnight_wallet_connected") === "true" &&
+      !state.isConnected &&
+      !isAutoConnecting.current
+    ) {
+      isAutoConnecting.current = true;
+      connectWallet()
+        .catch(() => {
+          sessionStorage.removeItem("midnight_wallet_connected");
+        })
+        .finally(() => {
+          isAutoConnecting.current = false;
+        });
+    }
+  }, [connectWallet, state.isConnected]);
+
+  // ── Context value ──────────────────────────────────────────────────────
   const contextValue: WalletContextType = {
-    state: computedState,
-    availableWallets,
+    state,
+    availableWallets: walletConfigs,
     connectWallet,
     disconnectWallet,
-    switchNetwork,
-    refreshBalance: refreshBalanceCallback,
+    refreshBalances,
+    walletAPI,
+    connectedApi,
   };
 
   return (
@@ -166,38 +295,16 @@ function WalletProviderInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Main provider component that wraps @uppzen/midnight-auth
-export function WalletProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <MidnightAuthProvider
-      sessionTimeout={24 * 60 * 60 * 1000} // 24 hours
-      autoConnect={true} // Enable auto-connect to persist wallet connection across page navigations
-      onConnect={() => {
-        // Connected
-      }}
-      onError={(error) => {
-        console.error('WalletProvider: Midnight auth error:', error);
-      }}
-      onDisconnect={() => {
-        // Disconnected
-      }}
-    >
-      <WalletProviderInner>
-        {children}
-      </WalletProviderInner>
-    </MidnightAuthProvider>
-  );
-}
+// ─── Hooks ───────────────────────────────────────────────────────────────────
 
 export function useWallet(): WalletContextType {
   const context = useContext(WalletContext);
   if (context === undefined) {
-    throw new Error('useWallet must be used within a WalletProvider');
+    throw new Error("useWallet must be used within a WalletProvider");
   }
   return context;
 }
 
-// Convenience hooks
 export function useWalletState() {
   const { state } = useWallet();
   return state;

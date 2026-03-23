@@ -73,7 +73,7 @@ export function PropertyRegistration({ onSuccess }: PropertyRegistrationProps) {
   ];
 
   const validateForm = (): boolean => {
-    const newErrors: Partial<PropertyFormData> = {};
+    const newErrors: Partial<Record<keyof PropertyFormData, string>> = {};
 
     if (!formData.title.trim()) newErrors.title = 'Property title is required';
     if (!formData.description.trim()) newErrors.description = 'Description is required';
