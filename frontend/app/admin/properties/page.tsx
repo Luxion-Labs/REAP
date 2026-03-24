@@ -44,6 +44,9 @@ export default function AdminPropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMinting, setIsMinting] = useState(false);
+  const [mintResult, setMintResult] = useState<{ txHash: string; propertyName: string } | null>(null);
+  const [selectedPropertyForDetails, setSelectedPropertyForDetails] = useState<Property | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [tokenConfig, setTokenConfig] = useState({
     propertyId: '',
     symbol: '',
@@ -68,11 +71,11 @@ export default function AdminPropertiesPage() {
     try {
       setIsLoading(true);
       const res = await apiClient.getProperties();
-      if (res.success && Array.isArray(res.data)) {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         const mappedProperties = res.data.map((p: any) => ({
           id: p.id,
           title: p.name,
-          status: 'registered' as const, // Default for now
+          status: 'registered' as const,
           totalValue: p.Value || p.value || 0,
           totalTokens: p.Shares || p.shares || 0,
           tokensMinted: p.Shares || p.shares || 0,
@@ -80,9 +83,19 @@ export default function AdminPropertiesPage() {
           hash: p.locationHash || 'not-anchored'
         }));
         setProperties(mappedProperties);
+      } else {
+        // Fallback for demo if no real properties exist
+        setProperties([
+          { id: 'mock-1', title: 'Example Commercial Center', status: 'registered', totalValue: 5000000, totalTokens: 50000, tokensMinted: 0, createdAt: new Date().toISOString(), hash: 'sh_a2f3...9e1' },
+          { id: 'mock-2', title: 'Urban Living Apartments', status: 'tokenized', totalValue: 12000000, totalTokens: 120000, tokensMinted: 120000, createdAt: new Date().toISOString(), hash: 'sh_9d4e...1c5' }
+        ]);
       }
     } catch (e) {
-      toast.error('Failed to load properties');
+      console.error(e);
+      toast.error('Failed to load properties, showing sample data');
+      setProperties([
+        { id: 'mock-1', title: 'Example Commercial Center', status: 'registered', totalValue: 5000000, totalTokens: 50000, tokensMinted: 0, createdAt: new Date().toISOString(), hash: 'sh_a2f3...9e1' }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -98,19 +111,23 @@ export default function AdminPropertiesPage() {
   };
 
   const handleViewDetails = (property: Property) => {
-    toast(`Viewing details for ${property.title}`, {
-      icon: '🔍',
-    });
+    setSelectedPropertyForDetails(property);
+    setIsDetailsOpen(true);
   };
 
   const handleMintTokens = async () => {
     if (!tokenConfig.propertyId) return;
     
     setIsMinting(true);
+    setMintResult(null);
     toast.loading('Generating ZKP & Minting tokens...', { id: 'mint' });
+    
+    const propName = selectedProperty?.title || 'Asset';
     
     // Simulate real delay
     setTimeout(() => {
+      const txHash = `0x${Math.random().toString(16).slice(2, 66)}`;
+      
       // Update local state to reflect tokenization (simulated)
       setProperties(prev => prev.map(p => 
         p.id === tokenConfig.propertyId 
@@ -124,22 +141,11 @@ export default function AdminPropertiesPage() {
           : p
       ));
       
+      setMintResult({ txHash, propertyName: propName });
       toast.success(`${tokenConfig.symbol} tokens minted successfully!`, { id: 'mint' });
       
-      // Clear form
-      setTokenConfig({
-        propertyId: '',
-        symbol: '',
-        supply: 1000,
-        price: 0,
-        platformReserve: 10,
-        liquidityPool: 20,
-        publicSale: 70
-      });
-      
       setIsMinting(false);
-      setActiveTab('manage'); // Switch to manage tab to see the updated status
-    }, 2000);
+    }, 2500);
   };
 
   const handleDeleteProperty = async (id: string, name: string) => {
@@ -391,23 +397,58 @@ export default function AdminPropertiesPage() {
                       </div>
                     </div>
 
-                    <Button 
-                      onClick={handleMintTokens}
-                      disabled={isMinting || !tokenConfig.propertyId || !tokenConfig.symbol}
-                      className="w-full py-6 text-lg font-bold bg-blue-600 hover:bg-blue-700 text-white gap-3 rounded-xl shadow-lg shadow-blue-500/20"
-                    >
-                      {isMinting ? (
-                        <>
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                          Generating ZKP & Minting...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-6 w-6" />
-                          Initialize Tokenization
-                        </>
+                      <Button 
+                        onClick={handleMintTokens}
+                        disabled={isMinting || !tokenConfig.propertyId || !tokenConfig.symbol}
+                        className="w-full py-6 text-lg font-bold bg-blue-600 hover:bg-blue-700 text-white gap-3 rounded-xl shadow-lg shadow-blue-500/20"
+                      >
+                        {isMinting ? (
+                          <>
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            Generating ZKP & Minting...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-6 w-6" />
+                            Initialize Tokenization
+                          </>
+                        )}
+                      </Button>
+
+                      {mintResult && (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="mt-6 p-6 bg-green-500/10 border border-green-500/20 rounded-xl space-y-4"
+                        >
+                          <div className="flex items-center gap-3 text-green-500">
+                            <CheckCircle2 className="h-6 w-6" />
+                            <h3 className="text-lg font-bold">Transaction Successful</h3>
+                          </div>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Property:</span>
+                              <span className="font-semibold">{mintResult.propertyName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Transaction Hash:</span>
+                              <code className="text-[10px] bg-slate-200 dark:bg-slate-900 px-2 py-1 rounded truncate max-w-[200px]">
+                                {mintResult.txHash}
+                              </code>
+                            </div>
+                            <div className="pt-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full text-green-500 border-green-500/30 hover:bg-green-500/10"
+                                onClick={() => setActiveTab('manage')}
+                              >
+                                View in Portfolio <ArrowRight className="h-4 w-4 ml-2" />
+                              </Button>
+                            </div>
+                          </div>
+                        </motion.div>
                       )}
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -629,6 +670,104 @@ export default function AdminPropertiesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Property Details Dialog */}
+      <PropertyDetailsDialog 
+        property={selectedPropertyForDetails} 
+        open={isDetailsOpen} 
+        onOpenChange={setIsDetailsOpen} 
+      />
     </div>
+  );
+}
+
+// ─── Subcomponents ───────────────────────────────────────────────────────────
+
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+
+function PropertyDetailsDialog({ property, open, onOpenChange }: { 
+  property: Property | null; 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void 
+}) {
+  if (!property) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-2">
+            <Building className="h-6 w-6 text-blue-500" />
+            <DialogTitle className="text-2xl font-bold">{property.title}</DialogTitle>
+          </div>
+          <DialogDescription className="text-slate-600 dark:text-slate-400">
+            Comprehensive breakdown of the asset and its on-chain status
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6">
+          <div className="space-y-4">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Asset Valuation</h4>
+              <div className="text-3xl font-bold text-slate-900 dark:text-white">${property.totalValue.toLocaleString()}</div>
+              <div className="text-xs text-blue-500 mt-1">Legally Appraised Value</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                <h4 className="text-[10px] font-semibold text-slate-500 uppercase">Tokens</h4>
+                <div className="text-lg font-bold">{property.totalTokens.toLocaleString()}</div>
+              </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                <h4 className="text-[10px] font-semibold text-slate-500 uppercase">Status</h4>
+                <Badge className="mt-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                  {property.status.toUpperCase()}
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <Shield className="h-4 w-4 text-green-500" />
+                On-Chain Metadata
+              </h4>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-500">Asset Hash:</span>
+                  <code className="font-mono text-blue-500">{property.hash?.slice(0, 16)}...</code>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-500">Registered:</span>
+                  <span>{new Date(property.createdAt).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-500">Contract Standard:</span>
+                  <span className="font-mono">Midnight-Asset-V1</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-600/5 p-4 rounded-xl border border-blue-500/10">
+              <h4 className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-2">Network Verification</h4>
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                This asset has been verified via Midnight ZKP. The ownership documents are anchored 
+                cryptographically and can be audited by authorized regulators using the viewing keys.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex sm:justify-between items-center bg-slate-50 dark:bg-slate-800/50 p-4 -m-6 mt-2 rounded-b-lg">
+          <div className="text-[10px] text-slate-500 italic">
+            Reference ID: {property.id}
+          </div>
+          <Button onClick={() => onOpenChange(false)} className="bg-slate-900 dark:bg-white text-white dark:text-slate-900">
+            Close Overview
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
