@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useWalletConnection, useWalletState, WalletContext } from './providers/wallet-provider';
-import { MidnightWalletState } from '@/lib/wallet-types';
+import { WalletState } from '@/lib/wallet-types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +42,7 @@ const WALLET_ICONS = {
 
 // Comprehensive wallet info component (inspired by create-midnight-dapp)
 function WalletInfo({ walletState, providerName, walletName, apiVersion, balance, capabilities, onDisconnect }: {
-  walletState?: MidnightWalletState;
+  walletState?: WalletState;
   providerName?: string;
   walletName?: string;
   apiVersion?: string;
@@ -50,7 +50,7 @@ function WalletInfo({ walletState, providerName, walletName, apiVersion, balance
   capabilities?: { walletTransfer?: boolean; coinEnum?: boolean };
   onDisconnect?: () => void;
 }) {
-  const formatAddress = (addr?: string) => {
+  const formatAddress = (addr?: string | null) => {
     if (!addr) return "—";
     return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
   };
@@ -186,7 +186,10 @@ function WalletInfo({ walletState, providerName, walletName, apiVersion, balance
 // Internal component that requires wallet provider
 function WalletConnectContent() {
   const { connectWallet, disconnectWallet, isConnected, isConnecting, error } = useWalletConnection();
-  const { address, provider, balance, walletState, providerName, walletName, apiVersion, capabilities } = useWalletState();
+  const state = useWalletState();
+  const { address, provider, balances, walletName, apiVersion, capabilities } = state;
+  const balance = balances?.dust?.balance || "0";
+  const providerName = provider === 'lace' ? 'Lace' : provider || "N/A";
 
   const handleConnect = async (walletType: 'metamask' | 'walletconnect' | 'lace' | 'midnight') => {
     await connectWallet(walletType);
@@ -199,10 +202,10 @@ function WalletConnectContent() {
   if (isConnected && address && provider) {
     return (
       <WalletInfo
-        walletState={walletState}
+        walletState={state}
         providerName={providerName}
-        walletName={walletName}
-        apiVersion={apiVersion}
+        walletName={walletName || "Lace Wallet"}
+        apiVersion={apiVersion || "3.0.0"}
         balance={balance}
         capabilities={capabilities}
         onDisconnect={handleDisconnect}
@@ -366,7 +369,7 @@ function WalletConnectCompact() {
               Wallet Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleDisconnect} className="gap-2 text-red-600">
+            <DropdownMenuItem onClick={() => handleDisconnect()} className="gap-2 text-red-600">
               <LogOut className="h-4 w-4" />
               Disconnect Wallet
             </DropdownMenuItem>

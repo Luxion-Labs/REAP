@@ -15,15 +15,16 @@ import type {
   MidnightWalletAPI,
 } from "@/types/midnight";
 
-import {
+import type {
+  WalletProvider,
   WalletState,
   WalletConfig,
   WalletConnectionResult,
   MidnightBalances,
   MidnightAddresses,
   MidnightServiceConfig,
-  DEFAULT_NETWORK_ID,
 } from "@/lib/wallet-types";
+import { DEFAULT_NETWORK_ID } from "@/lib/wallet-types";
 
 import {
   isWalletInstalled,
@@ -47,9 +48,12 @@ const walletConfigs: WalletConfig[] = [
 interface WalletContextType {
   state: WalletState;
   availableWallets: WalletConfig[];
-  connectWallet: () => Promise<WalletConnectionResult>;
-  disconnectWallet: () => Promise<void>;
+  connectWallet: (provider?: WalletProvider) => Promise<WalletConnectionResult>;
+  disconnectWallet: (provider?: WalletProvider) => Promise<void>;
+  /** Refresh balance data from the connected API */
   refreshBalances: () => Promise<void>;
+  /** Alias for refreshBalances for compatibility */
+  refreshBalance?: () => Promise<void>;
   /** The Mesh/WalletAPI instance (initialized on demand or if standard) */
   walletAPI: MidnightWalletAPI | null;
   /** The DApp/ConnectedAPI instance */

@@ -36,7 +36,6 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { MidnightSessionTimer } from '@uppzen/midnight-auth';
 
 // Mock data for BrickChain properties (replace with real API calls)
 const mockProperties = [
@@ -100,15 +99,18 @@ interface WalletProfileDialogProps {
 }
 
 export function WalletProfileDialog({ children, open, onOpenChange }: WalletProfileDialogProps) {
-  const { address, provider, balance, walletState, providerName, walletName, apiVersion } = useWalletState();
+  const state = useWalletState();
+  const { address, provider, balances, walletName, apiVersion } = state;
+  const balance = balances?.dust?.balance || "0";
+  const providerName = provider === 'lace' ? 'Lace' : provider || "N/A";
   const { disconnectWallet } = useWalletConnection();
-  const { refreshBalance } = useWallet();
+  const { refreshBalances } = useWallet();
   const [sendAmount, setSendAmount] = useState('');
   const [sendAddress, setSendAddress] = useState('');
   const [sendToken, setSendToken] = useState('tDUST');
   const [isSending, setIsSending] = useState(false);
 
-  const formatAddress = (addr?: string) => {
+  const formatAddress = (addr?: string | null) => {
     if (!addr) return "—";
     return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
   };
@@ -220,7 +222,7 @@ export function WalletProfileDialog({ children, open, onOpenChange }: WalletProf
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={disconnectWallet}
+                      onClick={() => disconnectWallet()}
                     >
                       Disconnect
                     </Button>
@@ -259,7 +261,7 @@ export function WalletProfileDialog({ children, open, onOpenChange }: WalletProf
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={refreshBalance}
+                      onClick={() => refreshBalances()}
                       className="gap-2"
                       title="Balance refresh may not work due to API limitations"
                     >
@@ -298,23 +300,21 @@ export function WalletProfileDialog({ children, open, onOpenChange }: WalletProf
                   </div>
                 </div>
 
-                {/* Session Timer */}
+                {/* Session Timer (Removed uppzen dependency) */}
                 <div className="space-y-3">
                   <h3 className="font-semibold flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     Session Status
                   </h3>
-                  <MidnightSessionTimer
-                    variant="compact"
-                    showRefreshButton={true}
-                    autoRefreshThreshold={5 * 60 * 1000} // Auto-refresh when 5 min remaining
-                  />
+                  <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground italic">
+                    Session management is handled by the wallet extension.
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Keys & Addresses (Shield/Legacy) */}
-            {walletState && (
+            {state && (
               <Card>
                 <CardHeader>
                   <CardTitle>Keys & Addresses</CardTitle>
@@ -331,8 +331,8 @@ export function WalletProfileDialog({ children, open, onOpenChange }: WalletProf
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            if (walletState.address) {
-                              navigator.clipboard?.writeText(walletState.address).then(() => {
+                            if (state.address) {
+                              navigator.clipboard?.writeText(state.address).then(() => {
                                 toast.success('Shield address copied!');
                               });
                             }
@@ -346,25 +346,25 @@ export function WalletProfileDialog({ children, open, onOpenChange }: WalletProf
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Address:</span>
                           <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">
-                            {formatAddress(walletState.address)}
+                            {formatAddress(state.address)}
                           </code>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Coin Public Key:</span>
                           <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">
-                            {formatAddress(walletState.coinPublicKey)}
+                            {formatAddress(state.coinPublicKey)}
                           </code>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Encryption Public Key:</span>
                           <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">
-                            {formatAddress(walletState.encryptionPublicKey)}
+                            {formatAddress(state.encryptionPublicKey)}
                           </code>
                         </div>
                       </div>
                     </div>
-
-                    {(walletState.addressLegacy || walletState.coinPublicKeyLegacy || walletState.encryptionPublicKeyLegacy) && (
+  
+                    {(state.addressLegacy || state.coinPublicKeyLegacy || state.encryptionPublicKeyLegacy) && (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <h4 className="font-medium text-sm">Legacy Address & Keys</h4>
@@ -372,8 +372,8 @@ export function WalletProfileDialog({ children, open, onOpenChange }: WalletProf
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              if (walletState.addressLegacy) {
-                                navigator.clipboard?.writeText(walletState.addressLegacy).then(() => {
+                              if (state.addressLegacy) {
+                                navigator.clipboard?.writeText(state.addressLegacy).then(() => {
                                   toast.success('Legacy address copied!');
                                 });
                               }
@@ -384,27 +384,27 @@ export function WalletProfileDialog({ children, open, onOpenChange }: WalletProf
                           </Button>
                         </div>
                         <div className="space-y-1 text-xs">
-                          {walletState.addressLegacy && (
+                          {state.addressLegacy && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Address:</span>
                               <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">
-                                {formatAddress(walletState.addressLegacy)}
+                                {formatAddress(state.addressLegacy)}
                               </code>
                             </div>
                           )}
-                          {walletState.coinPublicKeyLegacy && (
+                          {state.coinPublicKeyLegacy && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Coin Public Key:</span>
                               <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">
-                                {formatAddress(walletState.coinPublicKeyLegacy)}
+                                {formatAddress(state.coinPublicKeyLegacy)}
                               </code>
                             </div>
                           )}
-                          {walletState.encryptionPublicKeyLegacy && (
+                          {state.encryptionPublicKeyLegacy && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Encryption Public Key:</span>
                               <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">
-                                {formatAddress(walletState.encryptionPublicKeyLegacy)}
+                                {formatAddress(state.encryptionPublicKeyLegacy)}
                               </code>
                             </div>
                           )}
