@@ -9,11 +9,11 @@
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
-export type WalletProvider = 'lace' | 'midnight';
+export type WalletProvider = 'lace' | 'midnight' | 'metamask' | 'walletconnect';
 
 // ─── Core Wallet State ───────────────────────────────────────────────────────
 
-export interface WalletState {
+export interface MidnightWalletState {
   isConnected: boolean;
   isConnecting: boolean;
   address: string | null;
@@ -33,12 +33,26 @@ export interface WalletState {
   // Service URIs from wallet config
   serviceConfig: MidnightServiceConfig | null;
 
+  // Legacy fields (optional)
+  addressLegacy?: string | null;
+  coinPublicKeyLegacy?: string | null;
+  encryptionPublicKeyLegacy?: string | null;
+
   // Wallet metadata
   walletName: string | null;
   walletIcon: string | null;
   apiVersion: string | null;
   networkId: string | null;
+
+  // Capabilities (optional)
+  capabilities?: {
+    walletTransfer?: boolean;
+    coinEnum?: boolean;
+  };
 }
+
+/** Alias for backward compatibility */
+export type WalletState = MidnightWalletState;
 
 // ─── Midnight Balances (Three-Token Model) ───────────────────────────────────
 

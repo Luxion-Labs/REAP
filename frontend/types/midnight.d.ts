@@ -22,6 +22,14 @@ export interface MidnightWalletAPI {
  * Augmented InitialAPI that handles both Mesh and DApp Connector patterns.
  */
 export interface MidnightInitialAPI extends DAppInitialAPI {
+  /** The name of the wallet */
+  name: string;
+  /** The icon of the wallet */
+  icon?: string;
+  /** The version of the API */
+  apiVersion: string;
+  /** The DApp Connector connect method */
+  connect(networkId: string): Promise<MidnightConnectedAPI>;
   /** Mesh SDK / legacy connect method */
   enable(): Promise<MidnightWalletAPI>;
   /** End the session */
