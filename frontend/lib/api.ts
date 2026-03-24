@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 const API_BASE_URL_FORMS = process.env.NEXT_PUBLIC_API_BASE_URL_FORMS || 'https://waitflow.onrender.com';
 const PROJECT_ID = '69c115bb66242e3801a36b50';
 
@@ -42,12 +42,12 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json().catch(() => ({}));
-
+      const body = await response.json().catch(() => ({}));
+      
       return {
         success: response.ok,
-        data: response.ok ? data : undefined,
-        message: data.message || data.error || `Request failed with status ${response.status}`,
+        data: response.ok ? (body.data !== undefined ? body.data : body) : undefined,
+        message: body.message || body.error || `Request failed with status ${response.status}`,
         status: response.status,
       };
     } catch (error) {
@@ -97,18 +97,19 @@ class ApiClient {
     try {
       const response = await fetch(url, config);
       const contentType = response.headers.get("content-type");
-      let data;
+      let body;
       
       if (contentType && contentType.includes("application/json")) {
-        data = await response.json();
+        body = await response.json().catch(() => ({}));
       } else {
-        data = await response.text().catch(() => ({}));
+        const text = await response.text().catch(() => "");
+        body = { message: text };
       }
-
+      
       return {
         success: response.ok,
-        data: response.ok ? data : undefined,
-        message: data?.message || data?.error || `Request failed with status ${response.status}`,
+        data: response.ok ? (body.data !== undefined ? body.data : body) : undefined,
+        message: body?.message || body?.error || `Request failed with status ${response.status}`,
         status: response.status,
       };
     } catch (error) {
@@ -173,6 +174,32 @@ class ApiClient {
     return this.forms_request(`/v1/admin/contact/responses/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
+    });
+  }
+
+  // --- REAP Database Endpoints ---
+  async getProperties(): Promise<ApiResponse<any[]>> {
+    return this.base_request<any[]>('/v1/public/property');
+  }
+
+  async addProperty(data: {
+    name: string;
+    description: string;
+    documentId: string;
+    type: string;
+    location: string;
+    value: number;
+    shares: number;
+  }): Promise<ApiResponse<any>> {
+    return this.base_request<any>('/v1/admin/property', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteProperty(id: string): Promise<ApiResponse> {
+    return this.base_request(`/v1/admin/property/${id}`, {
+      method: 'DELETE',
     });
   }
 }
