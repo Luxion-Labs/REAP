@@ -72,9 +72,9 @@ const updateProperty = catchAsync(async (req: Request, res: Response) => {
 		if (description) updateData.description = description;
 		if (documentId) updateData.documentId = documentId;
 		if (type) updateData.type = type;
-		if (Location) updateData.Location = Location;
-		if (Value !== undefined) updateData.Value = parseFloat(Value);
-		if (Shares !== undefined) updateData.Shares = parseInt(Shares);
+		if (Location) updateData.location = Location;
+		if (Value !== undefined) updateData.value = parseFloat(Value);
+		if (Shares !== undefined) updateData.shares = parseInt(Shares);
 
 		const property = await db.property.update({
 			where: { id },
