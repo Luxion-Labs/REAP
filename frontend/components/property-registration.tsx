@@ -20,6 +20,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { apiClient } from '@/lib/api';
+
 
 interface PropertyFormData {
   title: string;
@@ -187,28 +189,32 @@ export function PropertyRegistration({ onSuccess }: PropertyRegistrationProps) {
       toast.loading('Registering property on blockchain...', { id: 'register' });
 
       const propertyData = {
-        ...formData,
-        documentHashes,
-        masterHash,
-        zkpProof,
-        timestamp: Date.now(),
-        status: 'pending_verification'
+        name: formData.title,
+        description: formData.description,
+        documentId: masterHash, // Using the document hash as ID to simulate on-chain anchor
+        type: formData.propertyType.toUpperCase().replace('-', '_').replace(' ', '_'),
+        location: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
+        value: parseFloat(formData.totalValue),
+        shares: parseInt(formData.totalShares)
       };
 
-      // Mock API call - replace with actual blockchain interaction
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      const response = await apiClient.addProperty(propertyData);
 
-      const propertyId = `prop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to register property');
+      }
+
+      const propertyId = (response.data?.id as string) || `prop_${Date.now()}`;
 
       toast.success('Property registered successfully!', { id: 'register' });
 
       // Step 4: Navigate to tokenization page
-      toast.success(`Property ${propertyId} registered! Proceeding to tokenization...`);
+      toast.success(`Property registered! Proceeding to tokenization...`);
 
       if (onSuccess) {
         onSuccess(propertyId);
       } else {
-        router.push(`/properties/${propertyId}/tokenize`);
+        router.push(`/admin/properties`);
       }
 
     } catch (error) {
