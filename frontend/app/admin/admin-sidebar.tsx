@@ -12,6 +12,10 @@ import {
   LogOut,
   ChevronRight,
   Building,
+  FileText,
+  PieChart,
+  ArrowRightLeft,
+  ShieldCheck,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -62,6 +66,26 @@ const adminItems: NavItem[] = [
     title: "Messages",
     url: "/admin/messages",
     icon: MessageSquare,
+  },
+  {
+    title: "Registration",
+    url: "/admin/registration",
+    icon: FileText,
+  },
+  {
+    title: "Tokenization",
+    url: "/admin/tokenization",
+    icon: PieChart,
+  },
+  {
+    title: "Transfers",
+    url: "/admin/transfers",
+    icon: ArrowRightLeft,
+  },
+  {
+    title: "Verification",
+    url: "/admin/verification",
+    icon: ShieldCheck,
   },
 ]
 

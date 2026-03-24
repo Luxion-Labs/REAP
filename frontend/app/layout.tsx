@@ -27,6 +27,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { Toaster } from 'react-hot-toast';
+
 export default function RootLayout({
   children,
 }: {
@@ -36,6 +38,12 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className={`${dmSerif.variable} ${inter.variable} ${jbMono.variable}`}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="theme">
         <body className="bg-slate-950 text-white font-sans antialiased overflow-x-hidden selection:bg-slate-300/40 selection:text-slate-900">
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              className: 'dark:bg-slate-800 dark:text-white',
+            }}
+          />
           {/* Noise Overlay */}
           <div className="pointer-events-none fixed inset-0 z-50 h-full w-full opacity-5 dark:mix-blend-overlay mix-blend-screen">
             <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
