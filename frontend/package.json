@@ -1,5 +1,5 @@
 {
-  "name": "reap-landing-page",
+  "name": "reap-real-esate-asset-protocol",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -72,5 +72,19 @@
     "eslint-config-next": "^15.4.9",
     "tailwindcss": "4.1.11",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-types": "^4.0.1"
+  },
+  "resolutions": {
+    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-types": "^4.0.1"
   }
 }
