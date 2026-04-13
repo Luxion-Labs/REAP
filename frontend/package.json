@@ -12,8 +12,10 @@
   "dependencies": {
     "@meshsdk/core": "^1.9.0-beta.101",
     "@meshsdk/midnight-setup": "^1.9.0-beta.98",
-    "@midnight-ntwrk/dapp-connector-api": "^3.0.0",
+    "@midnight-ntwrk/dapp-connector-api": "^4.0.0",
     "@midnight-ntwrk/ledger-v7": "^7.0.3",
+    "@midnight-ntwrk/midnight-js-contracts": "^4.0.2",
+    "@midnight-ntwrk/midnight-js-utils": "^4.0.2",
     "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
@@ -60,6 +62,7 @@
     "react-dom": "^19.2.1",
     "react-hot-toast": "^2.6.0",
     "tailwind-merge": "^3.3.1",
+    "semver": "^7.7.1",
     "three": "^0.183.2"
   },
   "devDependencies": {
@@ -78,13 +81,19 @@
     "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-types": "^4.0.1"
+    "@midnight-ntwrk/midnight-js-types": "^4.0.1",
+    "@midnight-ntwrk/compact-runtime": "0.15.0",
+    "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0",
+    "@midnight-ntwrk/compact-runtime/@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
   },
   "resolutions": {
     "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-types": "^4.0.1"
+    "@midnight-ntwrk/midnight-js-types": "^4.0.1",
+    "@midnight-ntwrk/compact-runtime": "0.15.0",
+    "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0",
+    "@midnight-ntwrk/compact-runtime/@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
   }
 }
