@@ -1,8 +1,5 @@
 // types.compact -> Common types and utilities for the BrickChain system
 
-pragma language_version >= 0.16 && <= 0.21;
-
-import CompactStandardLibrary;
 
 // Default values for system initialization
 export circuit getDefaultRegistrationFee(): Uint<64> {

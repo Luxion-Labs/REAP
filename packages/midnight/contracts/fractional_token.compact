@@ -1,8 +1,5 @@
-// fractional_token.compact -> It implements ERC20 style fungible token for property fractionalization, manages token supply, transfers, burning and property linking also supports different token state management.
-
-pragma language_version >= 0.16 && <= 0.30;
-
-import CompactStandardLibrary;
+// fractional_token.compact -> ERC20-style fungible token for property fractionalization.
+// Manages token supply, transfers, burning and property linking.
 
 // Token operational states
 enum TokenState {
@@ -11,8 +8,8 @@ enum TokenState {
     Frozen
 }
 
-// Property tokenization lifecycle states
-enum PropertyStatus {
+// Property tokenization lifecycle states (prefixed to avoid conflict with RegistryPropertyStatus)
+enum TokenPropertyStatus {
     Registered,
     Tokenized,
     Transferred,
@@ -22,38 +19,24 @@ enum PropertyStatus {
 // LEDGER STATE - Token Management
 export ledger total_supply: Uint<64>;
 export ledger circulating_supply: Uint<64>;
-export ledger nonce: Counter; // Transaction counter for state tracking
+export ledger nonce: Counter;
 
-// Track token balances
 export ledger balances: Map<Bytes<32>, Uint<64>>;
 export ledger token_state: TokenState;
 
-// Admin authorization
 export ledger token_admin: Bytes<32>;
 export ledger token_initialized: Boolean;
 
-// Track token holders and metadata
 export ledger holder_count: Uint<64>;
 export ledger holders: Map<Bytes<32>, Boolean>;
-export ledger holder_history: Map<Bytes<32>, Uint<64>>; // Track transfers per holder
+export ledger holder_history: Map<Bytes<32>, Uint<64>>;
 
-// Property-specific ledgers
-export ledger property_statuses: Map<Bytes<32>, PropertyStatus>;
-export ledger property_owners: Map<Bytes<32>, Bytes<32>>;
+// Property-specific ledgers (prefixed to avoid conflict with property_registry)
+export ledger ft_property_statuses: Map<Bytes<32>, TokenPropertyStatus>;
+export ledger ft_property_owners: Map<Bytes<32>, Bytes<32>>;
 export ledger property_token_ids: Map<Bytes<32>, Bytes<32>>;
-export ledger property_history: Map<Bytes<32>, Uint<64>>; // Track property updates
+export ledger ft_property_history: Map<Bytes<32>, Uint<64>>;
 
-// CONSTRUCTOR
-constructor() {
-    total_supply = 0;
-    circulating_supply = 0;
-    token_state = TokenState.Active;
-    holder_count = 0;
-    token_admin = pad(32, "");
-    token_initialized = false;
-}
-
-// INITIALIZATION
 
 // Initialize token with admin address
 export circuit initializeToken(admin: Bytes<32>): [] {
@@ -65,15 +48,8 @@ export circuit initializeToken(admin: Bytes<32>): [] {
     nonce.increment(1);
 }
 
-// TOKEN SUPPLY CIRCUITS
-
-// Mint new tokens - admin only
-// Creates new tokens and assigns to recipient
-export circuit mint(
-    to: Bytes<32>,
-    amount: Uint<64>,
-    caller: Bytes<32>
-): [] {
+// Mint new tokens (admin only)
+export circuit mint(to: Bytes<32>, amount: Uint<64>, caller: Bytes<32>): [] {
     assert(token_initialized, "Token not initialized");
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
@@ -85,13 +61,11 @@ export circuit mint(
 
     balances.insert(disclose(to), (current_balance + disclose(amount)) as Uint<64>);
 
-    // Track new holders
     if (!holders.member(disclose(to))) {
         holders.insert(disclose(to), true);
         holder_count = (holder_count + 1) as Uint<64>;
     }
 
-    // Update holder history
     const holder_txn_count = holder_history.member(disclose(to))
         ? holder_history.lookup(disclose(to))
         : 0 as Uint<64>;
@@ -103,13 +77,8 @@ export circuit mint(
     nonce.increment(1);
 }
 
-// Burn tokens - admin only
-// Removes tokens from circulation
-export circuit burn(
-    sender: Bytes<32>,
-    amount: Uint<64>,
-    caller: Bytes<32>
-): [] {
+// Burn tokens (admin only)
+export circuit burn(sender: Bytes<32>, amount: Uint<64>, caller: Bytes<32>): [] {
     assert(token_initialized, "Token not initialized");
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
@@ -121,7 +90,6 @@ export circuit burn(
 
     balances.insert(disclose(sender), (current_balance - disclose(amount)) as Uint<64>);
 
-    // Update holder history
     const holder_txn_count = holder_history.lookup(disclose(sender));
     holder_history.insert(disclose(sender), (holder_txn_count + 1) as Uint<64>);
 
@@ -131,10 +99,7 @@ export circuit burn(
     nonce.increment(1);
 }
 
-// TRANSFER CIRCUITS
-
 // Transfer tokens between holders
-// Standard ERC20-style transfer — caller must be the sender
 export circuit transfer(
     sender: Bytes<32>,
     to: Bytes<32>,
@@ -154,17 +119,14 @@ export circuit transfer(
         ? balances.lookup(disclose(to))
         : 0 as Uint<64>;
 
-    // Execute transfer
     balances.insert(disclose(sender), (from_balance - disclose(amount)) as Uint<64>);
     balances.insert(disclose(to), (to_balance + disclose(amount)) as Uint<64>);
 
-    // Track new holders
     if (!holders.member(disclose(to))) {
         holders.insert(disclose(to), true);
         holder_count = (holder_count + 1) as Uint<64>;
     }
 
-    // Update holder history for both parties
     const from_txn_count = holder_history.lookup(disclose(sender));
     holder_history.insert(disclose(sender), (from_txn_count + 1) as Uint<64>);
 
@@ -177,7 +139,6 @@ export circuit transfer(
 }
 
 // Approve spending
-// Production implementation: Validates owner authorization and approval amount
 export circuit approve(
     owner: Bytes<32>,
     spender: Bytes<32>,
@@ -198,10 +159,7 @@ export circuit approve(
     nonce.increment(1);
 }
 
-// TOKEN STATE MANAGEMENT
-
-// Pause token operations - admin only
-// Freezes all transfer, mint, and burn operations
+// Pause token operations (admin only)
 export circuit pause_token(caller: Bytes<32>): [] {
     assert(token_initialized, "Token not initialized");
     assert(disclose(caller) == token_admin, "Only admin can pause token");
@@ -211,8 +169,7 @@ export circuit pause_token(caller: Bytes<32>): [] {
     nonce.increment(1);
 }
 
-// Unpause token operations - admin only
-// Resumes normal operation after pause
+// Unpause token operations (admin only)
 export circuit unpause_token(caller: Bytes<32>): [] {
     assert(token_initialized, "Token not initialized");
     assert(disclose(caller) == token_admin, "Only admin can unpause token");
@@ -221,8 +178,6 @@ export circuit unpause_token(caller: Bytes<32>): [] {
     token_state = TokenState.Active;
     nonce.increment(1);
 }
-
-// QUERY CIRCUITS
 
 // Get balance of holder
 export circuit balanceOf(holder: Bytes<32>): Uint<64> {
@@ -233,24 +188,19 @@ export circuit balanceOf(holder: Bytes<32>): Uint<64> {
     }
 }
 
-// Get total token supply
 export circuit getTotalSupply(): Uint<64> {
     return total_supply;
 }
 
-// Get circulating supply
 export circuit getCirculatingSupply(): Uint<64> {
     return circulating_supply;
 }
 
-// Get token state
 export circuit getTokenState(): TokenState {
     return token_state;
 }
 
-// PROPERTY TOKENIZATION CIRCUITS
-
-// Register property for tokenization - admin only
+// Register property for tokenization (admin only)
 export circuit register_property(
     property_id: Bytes<32>,
     owner_id: Bytes<32>,
@@ -258,17 +208,16 @@ export circuit register_property(
 ): [] {
     assert(token_initialized, "Token not initialized");
     assert(disclose(caller) == token_admin, "Only admin can register properties");
-    assert(!property_statuses.member(disclose(property_id)), "Property already registered");
+    assert(!ft_property_statuses.member(disclose(property_id)), "Property already registered");
 
-    property_statuses.insert(disclose(property_id), PropertyStatus.Registered);
-    property_owners.insert(disclose(property_id), disclose(owner_id));
-    property_history.insert(disclose(property_id), 1 as Uint<64>);
+    ft_property_statuses.insert(disclose(property_id), TokenPropertyStatus.Registered);
+    ft_property_owners.insert(disclose(property_id), disclose(owner_id));
+    ft_property_history.insert(disclose(property_id), 1 as Uint<64>);
 
     nonce.increment(1);
 }
 
-// Tokenize property - admin only
-// Transitions property from Registered to Tokenized state
+// Tokenize property (admin only)
 export circuit tokenize_property(
     property_id: Bytes<32>,
     token_id: Bytes<32>,
@@ -276,21 +225,21 @@ export circuit tokenize_property(
 ): [] {
     assert(token_initialized, "Token not initialized");
     assert(disclose(caller) == token_admin, "Only admin can tokenize properties");
-    assert(property_statuses.member(disclose(property_id)), "Property not registered");
+    assert(ft_property_statuses.member(disclose(property_id)), "Property not registered");
 
-    const current_status = property_statuses.lookup(disclose(property_id));
-    assert(current_status == PropertyStatus.Registered, "Property not in Registered state");
+    const current_status = ft_property_statuses.lookup(disclose(property_id));
+    assert(current_status == TokenPropertyStatus.Registered, "Property not in Registered state");
 
-    property_statuses.insert(disclose(property_id), PropertyStatus.Tokenized);
+    ft_property_statuses.insert(disclose(property_id), TokenPropertyStatus.Tokenized);
     property_token_ids.insert(disclose(property_id), disclose(token_id));
 
-    const history_count = property_history.lookup(disclose(property_id));
-    property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
+    const history_count = ft_property_history.lookup(disclose(property_id));
+    ft_property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
 
     nonce.increment(1);
 }
 
-// Transfer property ownership - admin only
+// Transfer property ownership (admin only)
 export circuit transfer_property_ownership(
     property_id: Bytes<32>,
     new_owner_id: Bytes<32>,
@@ -298,49 +247,41 @@ export circuit transfer_property_ownership(
 ): [] {
     assert(token_initialized, "Token not initialized");
     assert(disclose(caller) == token_admin, "Only admin can transfer property ownership");
-    assert(property_statuses.member(disclose(property_id)), "Property not registered");
+    assert(ft_property_statuses.member(disclose(property_id)), "Property not registered");
     assert(disclose(new_owner_id) != pad(32, ""), "Invalid new owner");
 
-    property_owners.insert(disclose(property_id), disclose(new_owner_id));
-    property_statuses.insert(disclose(property_id), PropertyStatus.Transferred);
+    ft_property_owners.insert(disclose(property_id), disclose(new_owner_id));
+    ft_property_statuses.insert(disclose(property_id), TokenPropertyStatus.Transferred);
 
-    const history_count = property_history.lookup(disclose(property_id));
-    property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
+    const history_count = ft_property_history.lookup(disclose(property_id));
+    ft_property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
 
     nonce.increment(1);
 }
 
-// Deactivate property - admin only
-// Removes property from active circulation
-export circuit deactivate_property(
-    property_id: Bytes<32>,
-    caller: Bytes<32>
-): [] {
+// Deactivate property (admin only)
+export circuit deactivate_property(property_id: Bytes<32>, caller: Bytes<32>): [] {
     assert(token_initialized, "Token not initialized");
     assert(disclose(caller) == token_admin, "Only admin can deactivate properties");
-    assert(property_statuses.member(disclose(property_id)), "Property not registered");
+    assert(ft_property_statuses.member(disclose(property_id)), "Property not registered");
 
-    const current_status = property_statuses.lookup(disclose(property_id));
-    assert(current_status != PropertyStatus.Deactivated, "Property already deactivated");
+    const current_status = ft_property_statuses.lookup(disclose(property_id));
+    assert(current_status != TokenPropertyStatus.Deactivated, "Property already deactivated");
 
-    property_statuses.insert(disclose(property_id), PropertyStatus.Deactivated);
+    ft_property_statuses.insert(disclose(property_id), TokenPropertyStatus.Deactivated);
 
-    const history_count = property_history.lookup(disclose(property_id));
-    property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
+    const history_count = ft_property_history.lookup(disclose(property_id));
+    ft_property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
 
     nonce.increment(1);
 }
 
-// Get property status
-export circuit getPropertyStatus(property_id: Bytes<32>): PropertyStatus {
-    assert(property_statuses.member(disclose(property_id)), "Property not found");
-
-    return property_statuses.lookup(disclose(property_id));
+export circuit getPropertyStatus(property_id: Bytes<32>): TokenPropertyStatus {
+    assert(ft_property_statuses.member(disclose(property_id)), "Property not found");
+    return ft_property_statuses.lookup(disclose(property_id));
 }
 
-// Get property owner
 export circuit getPropertyOwner(property_id: Bytes<32>): Bytes<32> {
-    assert(property_statuses.member(disclose(property_id)), "Property not found");
-
-    return property_owners.lookup(disclose(property_id));
+    assert(ft_property_statuses.member(disclose(property_id)), "Property not found");
+    return ft_property_owners.lookup(disclose(property_id));
 }

@@ -1,8 +1,5 @@
-// escrow.compact -> Manages secure fund escrow for property transactions, Handles deposit, hold, release, and dispute resolution for payments, Implements trusted third-party escrow for buyer/seller protection
-
-pragma language_version >= 0.16 && <= 0.30;
-
-import CompactStandardLibrary;
+// escrow.compact -> Manages secure fund escrow for property transactions.
+// Handles deposit, hold, release, and dispute resolution for payments.
 
 // Escrow transaction states
 enum EscrowStatus {
@@ -22,31 +19,19 @@ export ledger escrow_statuses: Map<Bytes<32>, EscrowStatus>;
 export ledger escrow_listing_ids: Map<Bytes<32>, Bytes<32>>;
 export ledger escrow_created_at: Map<Bytes<32>, Uint<64>>;
 export ledger escrow_released_at: Map<Bytes<32>, Uint<64>>;
-export ledger escrow_disputes: Map<Bytes<32>, Bytes<128>>; // Dispute reason hash
+export ledger escrow_disputes: Map<Bytes<32>, Bytes<128>>;
 
-// Escrow service configuration
 export ledger escrow_initialized: Boolean;
-export ledger escrow_fee_percentage: Uint<64>; // Basis points
+export ledger escrow_fee_percentage: Uint<64>;
 export ledger escrow_paused: Boolean;
-export ledger admin_address: Bytes<32>;
-export ledger collected_fees: Uint<64>;
+export ledger esc_admin_address: Bytes<32>;
+export ledger esc_collected_fees: Uint<64>;
 
-// Audit trail
 export ledger escrow_counter: Counter;
 export ledger release_counter: Counter;
 export ledger dispute_counter: Counter;
-export ledger escrow_history: Map<Bytes<32>, Uint<64>>; // Track updates per escrow
+export ledger escrow_history: Map<Bytes<32>, Uint<64>>;
 
-// CONSTRUCTOR
-constructor() {
-    escrow_initialized = false;
-    escrow_fee_percentage = 100 as Uint<64>; // 1% default fee
-    escrow_paused = false;
-    admin_address = pad(32, "");
-    collected_fees = 0 as Uint<64>;
-}
-
-// INITIALIZATION CIRCUIT
 
 // Initialize escrow service
 export circuit initializeEscrow(admin: Bytes<32>): [] {
@@ -54,13 +39,10 @@ export circuit initializeEscrow(admin: Bytes<32>): [] {
     assert(disclose(admin) != pad(32, ""), "Invalid admin address");
 
     escrow_initialized = true;
-    admin_address = disclose(admin);
+    esc_admin_address = disclose(admin);
 }
 
-// ESCROW DEPOSIT CIRCUITS
-
 // Create escrow deposit
-// Buyer deposits funds for property purchase
 export circuit depositEscrow(
     escrow_id: Bytes<32>,
     listing_id: Bytes<32>,
@@ -88,10 +70,7 @@ export circuit depositEscrow(
     escrow_history.insert(disclose(escrow_id), 1 as Uint<64>);
 }
 
-// ESCROW RELEASE CIRCUITS
-
-// Release escrow to seller
-// Admin releases funds to seller after transaction completion
+// Release escrow to seller (admin only)
 export circuit releaseEscrow(
     escrow_id: Bytes<32>,
     caller: Bytes<32>,
@@ -100,22 +79,14 @@ export circuit releaseEscrow(
     assert(escrow_initialized, "Escrow service not initialized");
     assert(!escrow_paused, "Escrow service is paused");
     assert(escrow_statuses.member(disclose(escrow_id)), "Escrow not found");
-    assert(disclose(caller) == admin_address, "Only admin can release escrow");
+    assert(disclose(caller) == esc_admin_address, "Only admin can release escrow");
 
     const current_status = escrow_statuses.lookup(disclose(escrow_id));
     assert(current_status == EscrowStatus.Deposited, "Escrow not in deposited state");
 
-    const amount = escrow_amounts.lookup(disclose(escrow_id));
+    const fee_amount = 100 as Uint<64>;
+    esc_collected_fees = (esc_collected_fees + fee_amount) as Uint<64>;
 
-    // Fee: escrow_fee_percentage basis points of amount
-    // fee = amount * escrow_fee_percentage / 10000
-    // Safe upper-bound check: fee_amount * 10000 <= amount * escrow_fee_percentage
-    const fee_amount = 100 as Uint<64>; // Fixed fee for escrow service
-
-    // Accumulate fees
-    collected_fees = (collected_fees + fee_amount) as Uint<64>;
-
-    // Mark as released
     escrow_statuses.insert(disclose(escrow_id), EscrowStatus.Released);
     escrow_released_at.insert(disclose(escrow_id), disclose(timestamp_seconds));
 
@@ -124,10 +95,7 @@ export circuit releaseEscrow(
     escrow_history.insert(disclose(escrow_id), (history_count + 1 as Uint<64>) as Uint<64>);
 }
 
-// DISPUTE CIRCUITS
-
 // File dispute on escrow
-// Either buyer or seller can initiate dispute resolution
 export circuit fileDispute(
     escrow_id: Bytes<32>,
     dispute_reason: Bytes<128>,
@@ -156,15 +124,14 @@ export circuit fileDispute(
     escrow_history.insert(disclose(escrow_id), (history_count + 1 as Uint<64>) as Uint<64>);
 }
 
-// Resolve dispute
-// Admin resolves dispute and releases/refunds accordingly
+// Resolve dispute (admin only)
 export circuit resolveDispute(
     escrow_id: Bytes<32>,
     release_to_seller: Boolean,
     caller: Bytes<32>
 ): [] {
     assert(escrow_initialized, "Escrow service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can resolve disputes");
+    assert(disclose(caller) == esc_admin_address, "Only admin can resolve disputes");
     assert(escrow_statuses.member(disclose(escrow_id)), "Escrow not found");
 
     const current_status = escrow_statuses.lookup(disclose(escrow_id));
@@ -175,8 +142,6 @@ export circuit resolveDispute(
     const history_count = escrow_history.lookup(disclose(escrow_id));
     escrow_history.insert(disclose(escrow_id), (history_count + 1 as Uint<64>) as Uint<64>);
 }
-
-// QUERY CIRCUITS
 
 // Get escrow information
 export circuit getEscrow(escrow_id: Bytes<32>): [Bytes<32>, Bytes<32>, Uint<64>, EscrowStatus] {
@@ -204,12 +169,10 @@ export circuit getEscrowTimestamps(escrow_id: Bytes<32>): [Uint<64>, Uint<64>] {
     return [created_at, released_at];
 }
 
-// ADMIN MANAGEMENT CIRCUITS
-
 // Set escrow fee percentage (admin only)
 export circuit setEscrowFee(new_fee: Uint<64>, caller: Bytes<32>): [] {
     assert(escrow_initialized, "Escrow service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can set fee");
+    assert(disclose(caller) == esc_admin_address, "Only admin can set fee");
     assert(disclose(new_fee) <= 1000 as Uint<64>, "Fee cannot exceed 10%");
 
     escrow_fee_percentage = disclose(new_fee);
@@ -218,7 +181,7 @@ export circuit setEscrowFee(new_fee: Uint<64>, caller: Bytes<32>): [] {
 // Pause escrow service (admin only)
 export circuit pauseEscrow(caller: Bytes<32>): [] {
     assert(escrow_initialized, "Escrow service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can pause escrow");
+    assert(disclose(caller) == esc_admin_address, "Only admin can pause escrow");
     assert(!escrow_paused, "Escrow service already paused");
 
     escrow_paused = true;
@@ -227,7 +190,7 @@ export circuit pauseEscrow(caller: Bytes<32>): [] {
 // Unpause escrow service (admin only)
 export circuit unpauseEscrow(caller: Bytes<32>): [] {
     assert(escrow_initialized, "Escrow service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can unpause escrow");
+    assert(disclose(caller) == esc_admin_address, "Only admin can unpause escrow");
     assert(escrow_paused, "Escrow service not paused");
 
     escrow_paused = false;
@@ -236,10 +199,10 @@ export circuit unpauseEscrow(caller: Bytes<32>): [] {
 // Collect accumulated fees (admin only)
 export circuit collectEscrowFees(caller: Bytes<32>): Uint<64> {
     assert(escrow_initialized, "Escrow service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can collect fees");
+    assert(disclose(caller) == esc_admin_address, "Only admin can collect fees");
 
-    const fees_to_collect = collected_fees;
-    collected_fees = 0 as Uint<64>;
+    const fees_to_collect = esc_collected_fees;
+    esc_collected_fees = 0 as Uint<64>;
 
     return fees_to_collect;
 }

@@ -1,8 +1,5 @@
 // utils.compact -> Common utility functions for the BrickChain system, Provides reusable validation, calculation, and state management utilities
 
-pragma language_version >= 0.16 && <= 0.21;
-
-import CompactStandardLibrary;
 
 // AUTHORIZATION UTILITIES
 
@@ -100,7 +97,7 @@ export circuit decrementCounter(current_count: Uint<64>): Uint<64> {
 // HASH AND ENCODING UTILITIES
 
 // Generate event ID from hash inputs
-export circuit generateEventId(contract: Bytes<32>, action: Uint<8>, nonce: Uint<64>): Bytes<32> {
+export circuit generateEventId(contract_id: Bytes<32>, action: Uint<8>, nonce: Uint<64>): Bytes<32> {
     // In production, this would hash the inputs
     // For now, encode as placeholder
     return 0x0000000000000000000000000000000000000000000000000000000000000000 as Bytes<32>;

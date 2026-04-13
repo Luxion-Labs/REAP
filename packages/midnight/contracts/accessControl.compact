@@ -1,8 +1,5 @@
-// access_control.compact -> Manages permissions, permissions groups, and access control lists, Provides fine-grained access control for contract operations, Implements role-based and permission-based authorization checks
-
-pragma language_version >= 0.16 && <= 0.30;
-
-import CompactStandardLibrary;
+// accessControl.compact -> Manages permissions, permissions groups, and access control lists.
+// Provides fine-grained access control for contract operations.
 
 // Permission types in the system
 enum Permission {
@@ -16,30 +13,19 @@ enum Permission {
 }
 
 // LEDGER STATE - Access Control Management
-// user_permissions: keyed by hash of (user || resource_id) -> has_permission
 export ledger user_permissions: Map<Bytes<32>, Boolean>;
-export ledger resource_permissions: Map<Bytes<32>, Map<Permission, Boolean>>; // resource -> permission -> enabled
-export ledger permission_grants: Map<Bytes<32>, Bytes<32>>; // grant_id -> granter_address
-export ledger permission_history: Map<Bytes<32>, Uint<64>>; // track permission changes
+export ledger resource_permissions: Map<Bytes<32>, Map<Permission, Boolean>>;
+export ledger permission_grants: Map<Bytes<32>, Bytes<32>>;
+export ledger permission_history: Map<Bytes<32>, Uint<64>>;
 
-// Access control configuration
 export ledger access_control_initialized: Boolean;
-export ledger admin_address: Bytes<32>;
+export ledger ac_admin_address: Bytes<32>;
 export ledger access_paused: Boolean;
 
-// Audit trail
 export ledger permission_counter: Counter;
 export ledger grant_counter: Counter;
 export ledger revoke_counter: Counter;
 
-// CONSTRUCTOR
-constructor() {
-    access_control_initialized = false;
-    admin_address = pad(32, "");
-    access_paused = false;
-}
-
-// INITIALIZATION CIRCUIT
 
 // Initialize access control system
 export circuit initializeAccessControl(admin: Bytes<32>): [] {
@@ -47,14 +33,10 @@ export circuit initializeAccessControl(admin: Bytes<32>): [] {
     assert(disclose(admin) != pad(32, ""), "Invalid admin address");
 
     access_control_initialized = true;
-    admin_address = disclose(admin);
+    ac_admin_address = disclose(admin);
 }
 
-// PERMISSION GRANT CIRCUITS
-
-// Grant permission to user for resource
-// Admin grants specific permissions to users
-// Stores a permission entry keyed by XOR-fold of user and resource_id bytes
+// Grant permission to user for resource (admin only)
 export circuit grantPermission(
     grant_id: Bytes<32>,
     user: Bytes<32>,
@@ -63,21 +45,16 @@ export circuit grantPermission(
 ): [] {
     assert(access_control_initialized, "Access control not initialized");
     assert(!access_paused, "Access control is paused");
-    assert(disclose(caller) == admin_address, "Only admin can grant permissions");
+    assert(disclose(caller) == ac_admin_address, "Only admin can grant permissions");
     assert(disclose(user) != pad(32, ""), "Invalid user address");
 
-    // Record the grant with granter
     permission_grants.insert(disclose(grant_id), disclose(caller));
-
-    // Write permission entry keyed by grant_id (which encodes user+resource)
-    // Callers must derive grant_id as hash(user || resource_id) for lookup consistency
     user_permissions.insert(disclose(grant_id), true);
 
     grant_counter.increment(1);
 }
 
-// Revoke permission from user for resource
-// Admin revokes specific permissions from users
+// Revoke permission from user for resource (admin only)
 export circuit revokePermission(
     grant_id: Bytes<32>,
     user: Bytes<32>,
@@ -85,30 +62,21 @@ export circuit revokePermission(
 ): [] {
     assert(access_control_initialized, "Access control not initialized");
     assert(!access_paused, "Access control is paused");
-    assert(disclose(caller) == admin_address, "Only admin can revoke permissions");
+    assert(disclose(caller) == ac_admin_address, "Only admin can revoke permissions");
     assert(permission_grants.member(disclose(grant_id)), "Permission grant not found");
 
-    // Clear the permission entry
     user_permissions.insert(disclose(grant_id), false);
 
     revoke_counter.increment(1);
 }
 
-// PERMISSION CHECK CIRCUITS
-
 // Check if user has read permission on resource
-// grant_id must be derived as hash(user || resource_id) by the caller
-export circuit hasReadPermission(
-    grant_id: Bytes<32>,
-    user: Bytes<32>
-): [Boolean] {
+export circuit hasReadPermission(grant_id: Bytes<32>, user: Bytes<32>): [Boolean] {
     assert(access_control_initialized, "Access control not initialized");
 
-    const is_admin = disclose(user) == admin_address;
-    if (is_admin) {
+    if (disclose(user) == ac_admin_address) {
         return [true];
     }
-
     if (user_permissions.member(disclose(grant_id))) {
         return [user_permissions.lookup(disclose(grant_id))];
     }
@@ -116,17 +84,12 @@ export circuit hasReadPermission(
 }
 
 // Check if user has write permission on resource
-export circuit hasWritePermission(
-    grant_id: Bytes<32>,
-    user: Bytes<32>
-): [Boolean] {
+export circuit hasWritePermission(grant_id: Bytes<32>, user: Bytes<32>): [Boolean] {
     assert(access_control_initialized, "Access control not initialized");
 
-    const is_admin = disclose(user) == admin_address;
-    if (is_admin) {
+    if (disclose(user) == ac_admin_address) {
         return [true];
     }
-
     if (user_permissions.member(disclose(grant_id))) {
         return [user_permissions.lookup(disclose(grant_id))];
     }
@@ -134,27 +97,19 @@ export circuit hasWritePermission(
 }
 
 // Check if user has execute permission on resource
-export circuit hasExecutePermission(
-    grant_id: Bytes<32>,
-    user: Bytes<32>
-): [Boolean] {
+export circuit hasExecutePermission(grant_id: Bytes<32>, user: Bytes<32>): [Boolean] {
     assert(access_control_initialized, "Access control not initialized");
 
-    const is_admin = disclose(user) == admin_address;
-    if (is_admin) {
+    if (disclose(user) == ac_admin_address) {
         return [true];
     }
-
     if (user_permissions.member(disclose(grant_id))) {
         return [user_permissions.lookup(disclose(grant_id))];
     }
     return [false];
 }
 
-// RESOURCE PERMISSION CIRCUITS
-
-// Enable permission for resource
-// Admin enables specific permission types for resources
+// Enable permission for resource (admin only)
 export circuit enableResourcePermission(
     resource_id: Bytes<32>,
     permission: Permission,
@@ -162,13 +117,12 @@ export circuit enableResourcePermission(
 ): [] {
     assert(access_control_initialized, "Access control not initialized");
     assert(!access_paused, "Access control is paused");
-    assert(disclose(caller) == admin_address, "Only admin can enable permissions");
+    assert(disclose(caller) == ac_admin_address, "Only admin can enable permissions");
 
     permission_counter.increment(1);
 }
 
-// Disable permission for resource
-// Admin disables specific permission types for resources
+// Disable permission for resource (admin only)
 export circuit disableResourcePermission(
     resource_id: Bytes<32>,
     permission: Permission,
@@ -176,17 +130,15 @@ export circuit disableResourcePermission(
 ): [] {
     assert(access_control_initialized, "Access control not initialized");
     assert(!access_paused, "Access control is paused");
-    assert(disclose(caller) == admin_address, "Only admin can disable permissions");
+    assert(disclose(caller) == ac_admin_address, "Only admin can disable permissions");
 
     permission_counter.increment(1);
 }
 
-// PAUSE/UNPAUSE CIRCUITS
-
 // Pause access control (emergency only)
 export circuit pauseAccessControl(caller: Bytes<32>): [] {
     assert(access_control_initialized, "Access control not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can pause");
+    assert(disclose(caller) == ac_admin_address, "Only admin can pause");
     assert(!access_paused, "Already paused");
 
     access_paused = true;
@@ -195,19 +147,17 @@ export circuit pauseAccessControl(caller: Bytes<32>): [] {
 // Unpause access control
 export circuit unpauseAccessControl(caller: Bytes<32>): [] {
     assert(access_control_initialized, "Access control not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can unpause");
+    assert(disclose(caller) == ac_admin_address, "Only admin can unpause");
     assert(access_paused, "Not paused");
 
     access_paused = false;
 }
 
-// ADMIN TRANSFER CIRCUITS
-
 // Transfer admin rights to new address
 export circuit transferAdminRights(new_admin: Bytes<32>, caller: Bytes<32>): [] {
     assert(access_control_initialized, "Access control not initialized");
-    assert(disclose(caller) == admin_address, "Only current admin can transfer");
+    assert(disclose(caller) == ac_admin_address, "Only current admin can transfer");
     assert(disclose(new_admin) != pad(32, ""), "Invalid new admin");
 
-    admin_address = disclose(new_admin);
+    ac_admin_address = disclose(new_admin);
 }

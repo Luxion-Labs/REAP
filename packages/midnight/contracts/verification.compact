@@ -1,8 +1,5 @@
-// verification.compact -> It manages property verification requests and approvals, coordinates between property owners and professional verifiers and tracks verification status and maintains audit trail
-
-pragma language_version >= 0.16 && <= 0.30;
-
-import CompactStandardLibrary;
+// verification.compact -> Manages property verification requests and approvals.
+// Coordinates between property owners and professional verifiers.
 
 // Verification request lifecycle states
 enum VerificationStatus {
@@ -20,32 +17,20 @@ export ledger verification_statuses: Map<Bytes<32>, VerificationStatus>;
 export ledger verification_timestamps: Map<Bytes<32>, Uint<64>>;
 export ledger verification_documents: Map<Bytes<32>, Bytes<64>>;
 export ledger verification_results: Map<Bytes<32>, Bytes<128>>;
-export ledger verification_verifiers: Map<Bytes<32>, Bytes<32>>; // Who verified
-export ledger verification_history: Map<Bytes<32>, Uint<64>>; // Track update count
+export ledger verification_verifiers: Map<Bytes<32>, Bytes<32>>;
+export ledger verification_history: Map<Bytes<32>, Uint<64>>;
 
-// Verification service configuration
 export ledger verification_initialized: Boolean;
 export ledger verification_fee: Uint<64>;
 export ledger verification_paused: Boolean;
-export ledger admin_address: Bytes<32>;
-export ledger verifier_addresses: Map<Bytes<32>, Boolean>; // approved verifiers
-export ledger collected_fees: Uint<64>; // Accumulated verification fees
+export ledger ver_admin_address: Bytes<32>;
+export ledger verifier_addresses: Map<Bytes<32>, Boolean>;
+export ledger ver_collected_fees: Uint<64>;
 
-// Request counter and metrics
 export ledger request_counter: Counter;
 export ledger approved_count: Counter;
 export ledger rejected_count: Counter;
 
-// CONSTRUCTOR
-constructor() {
-    verification_initialized = false;
-    verification_fee = 500 as Uint<64>; // Default fee
-    verification_paused = false;
-    admin_address = pad(32, "");
-    collected_fees = 0 as Uint<64>;
-}
-
-// INITIALIZATION CIRCUIT
 
 // Initialize verification service
 export circuit initializeVerification(admin: Bytes<32>): [] {
@@ -53,14 +38,10 @@ export circuit initializeVerification(admin: Bytes<32>): [] {
     assert(disclose(admin) != pad(32, ""), "Invalid admin address");
 
     verification_initialized = true;
-    admin_address = disclose(admin);
+    ver_admin_address = disclose(admin);
 }
 
-// VERIFICATION REQUEST CIRCUITS
-
 // Request property verification
-// Initiates verification process for a property
-// timestamp_seconds is from blockchain transaction context
 export circuit requestVerification(
     request_id: Bytes<32>,
     property_id: Bytes<32>,
@@ -84,36 +65,26 @@ export circuit requestVerification(
     verification_history.insert(disclose(request_id), 1 as Uint<64>);
 }
 
-// VERIFIER MANAGEMENT CIRCUITS
-
 // Approve verifier (admin only)
-// Adds address to list of approved verifiers
 export circuit approveVerifier(verifier: Bytes<32>, caller: Bytes<32>): [] {
     assert(verification_initialized, "Verification service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can approve verifiers");
+    assert(disclose(caller) == ver_admin_address, "Only admin can approve verifiers");
     assert(disclose(verifier) != pad(32, ""), "Invalid verifier address");
 
     verifier_addresses.insert(disclose(verifier), true);
 }
 
 // Remove verifier (admin only)
-// Revokes verifier credentials
 export circuit removeVerifier(verifier: Bytes<32>, caller: Bytes<32>): [] {
     assert(verification_initialized, "Verification service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can remove verifiers");
+    assert(disclose(caller) == ver_admin_address, "Only admin can remove verifiers");
     assert(verifier_addresses.member(disclose(verifier)), "Verifier not found");
 
     verifier_addresses.insert(disclose(verifier), false);
 }
 
-// VERIFICATION WORKFLOW CIRCUITS
-
 // Start verification process (verifier only)
-// Marks request as in-progress, verifier takes ownership
-export circuit startVerification(
-    request_id: Bytes<32>,
-    verifier: Bytes<32>
-): [] {
+export circuit startVerification(request_id: Bytes<32>, verifier: Bytes<32>): [] {
     assert(verification_initialized, "Verification service not initialized");
     assert(!verification_paused, "Verification service is paused");
     assert(verification_statuses.member(disclose(request_id)), "Request not found");
@@ -131,7 +102,6 @@ export circuit startVerification(
 }
 
 // Submit verification result (verifier only)
-// Completes verification with approval or rejection
 export circuit submitVerificationResult(
     request_id: Bytes<32>,
     result_hash: Bytes<128>,
@@ -147,7 +117,6 @@ export circuit submitVerificationResult(
     const current_status = verification_statuses.lookup(disclose(request_id));
     assert(current_status == VerificationStatus.InProgress, "Request not in progress");
 
-    // Ensure the submitting verifier is the one assigned to this request
     assert(verification_verifiers.member(disclose(request_id)), "No verifier assigned");
     const assigned_verifier = verification_verifiers.lookup(disclose(request_id));
     assert(disclose(verifier) == assigned_verifier, "Only assigned verifier can submit result");
@@ -166,10 +135,7 @@ export circuit submitVerificationResult(
     verification_history.insert(disclose(request_id), (history_count + 1) as Uint<64>);
 }
 
-// QUERY CIRCUITS
-
 // Get verification status
-// Returns status, requester, and property details
 export circuit getVerificationStatus(request_id: Bytes<32>): [VerificationStatus, Bytes<32>, Bytes<32>] {
     assert(verification_initialized, "Verification service not initialized");
     assert(verification_statuses.member(disclose(request_id)), "Request not found");
@@ -182,7 +148,6 @@ export circuit getVerificationStatus(request_id: Bytes<32>): [VerificationStatus
 }
 
 // Get verification result
-// Returns result hash if available
 export circuit getVerificationResult(request_id: Bytes<32>): Bytes<128> {
     assert(verification_initialized, "Verification service not initialized");
     assert(verification_statuses.member(disclose(request_id)), "Request not found");
@@ -192,8 +157,6 @@ export circuit getVerificationResult(request_id: Bytes<32>): Bytes<128> {
 }
 
 // Verify proof
-// Validates that proof_data matches the stored verification result hash
-// Returns true only when the request is Approved AND proof_data matches stored_result
 export circuit verifyProof(
     request_id: Bytes<32>,
     proof_data: Bytes<128>,
@@ -205,12 +168,10 @@ export circuit verifyProof(
 
     const status = verification_statuses.lookup(disclose(request_id));
 
-    // Proof can only be verified against approved requests
     if (status != VerificationStatus.Approved) {
         return false;
     }
 
-    // Verify result exists and was recorded by verifier
     if (!verification_results.member(disclose(request_id))) {
         return false;
     }
@@ -219,46 +180,41 @@ export circuit verifyProof(
         return false;
     }
 
-    // Compare proof_data against stored result hash
-    // The caller must supply the exact result_hash that was stored by the verifier
     const stored_result = verification_results.lookup(disclose(request_id));
     return disclose(proof_data) == stored_result;
 }
 
-// ADMIN MANAGEMENT CIRCUITS
-
 // Set verification fee (admin only)
 export circuit setVerificationFee(new_fee: Uint<64>, caller: Bytes<32>): [] {
     assert(verification_initialized, "Verification service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can set fee");
+    assert(disclose(caller) == ver_admin_address, "Only admin can set fee");
     assert(disclose(new_fee) > 0 as Uint<64>, "Fee must be positive");
 
     verification_fee = disclose(new_fee);
 }
 
-// Collect verification fees
-// Admin only - accumulates fees from verification requests
+// Collect verification fees (admin only)
 export circuit collectVerificationFee(amount: Uint<64>, caller: Bytes<32>): [] {
     assert(verification_initialized, "Verification service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can collect fees");
+    assert(disclose(caller) == ver_admin_address, "Only admin can collect fees");
     assert(disclose(amount) > 0 as Uint<64>, "Amount must be positive");
 
-    collected_fees = (collected_fees + disclose(amount)) as Uint<64>;
+    ver_collected_fees = (ver_collected_fees + disclose(amount)) as Uint<64>;
 }
 
 // Get collected verification fees
-export circuit getCollectedFees(): Uint<64> {
+export circuit getVerificationCollectedFees(): Uint<64> {
     assert(verification_initialized, "Verification service not initialized");
-    return collected_fees;
+    return ver_collected_fees;
 }
 
-// Withdraw collected verification fees
-export circuit withdrawCollectedFees(caller: Bytes<32>): Uint<64> {
+// Withdraw collected verification fees (admin only)
+export circuit withdrawVerificationFees(caller: Bytes<32>): Uint<64> {
     assert(verification_initialized, "Verification service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can withdraw fees");
+    assert(disclose(caller) == ver_admin_address, "Only admin can withdraw fees");
 
-    const fees_to_withdraw = collected_fees;
-    collected_fees = 0 as Uint<64>;
+    const fees_to_withdraw = ver_collected_fees;
+    ver_collected_fees = 0 as Uint<64>;
 
     return fees_to_withdraw;
 }
@@ -266,7 +222,7 @@ export circuit withdrawCollectedFees(caller: Bytes<32>): Uint<64> {
 // Pause verification service (admin only)
 export circuit pauseVerification(caller: Bytes<32>): [] {
     assert(verification_initialized, "Verification service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can pause verification");
+    assert(disclose(caller) == ver_admin_address, "Only admin can pause verification");
     assert(!verification_paused, "Verification service already paused");
 
     verification_paused = true;
@@ -275,7 +231,7 @@ export circuit pauseVerification(caller: Bytes<32>): [] {
 // Unpause verification service (admin only)
 export circuit unpauseVerification(caller: Bytes<32>): [] {
     assert(verification_initialized, "Verification service not initialized");
-    assert(disclose(caller) == admin_address, "Only admin can unpause verification");
+    assert(disclose(caller) == ver_admin_address, "Only admin can unpause verification");
     assert(verification_paused, "Verification service not paused");
 
     verification_paused = false;
