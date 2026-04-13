@@ -1,8 +1,8 @@
 services:
   api:
     build:
-      context: /Users/samarthhhh/Documents/mlh-internship/BrickChain/packages/api
-      dockerfile: /Users/samarthhhh/Documents/mlh-internship/BrickChain/packages/api/Dockerfile
+      context: ../packages/api
+      dockerfile: Dockerfile
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -25,8 +25,8 @@ services:
       - ipfs_data:/data/ipfs
 
   indexer:
-    container_name: 'counter-indexer'
-    image: 'midnightntwrk/indexer-standalone:2.1.1'
+    container_name: 'reap-indexer'
+    image: 'midnightntwrk/indexer-standalone:3.0.0'
     ports:
       - '0:8088'
     environment:
@@ -35,8 +35,8 @@ services:
       APP__INFRA__NODE__URL: "ws://node:9944"
 
   node:
-    image: 'midnightnetwork/midnight-node:0.12.0'
-    container_name: 'counter-node'
+    image: 'midnightntwrk/midnight-node:0.20.0'
+    container_name: 'reap-node'
     ports:
       - "9944:9944"
     healthcheck:
@@ -49,8 +49,8 @@ services:
       CFG_PRESET: "dev"
 
   proof-server:
-    container_name: 'counter-proof-server'
-    image: "midnightnetwork/proof-server:latest"
+    container_name: 'reap-proof-server'
+    image: "midnightntwrk/proof-server:7.0.0"
     ports:
       - "6300:6300"
     environment:

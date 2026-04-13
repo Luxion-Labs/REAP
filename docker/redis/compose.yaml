@@ -1,6 +1,6 @@
 services:
   redis:
     image: 'redis:7.0.11-alpine'
-    container_name: 'counter-redis'
+    container_name: 'reap-redis'
     ports:
       - "6379:6379"

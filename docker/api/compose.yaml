@@ -1,5 +1,5 @@
 services:
-  brickchain_auth:
+  reap_auth:
     build:
       context: ../../packages/api/.
       dockerfile: ../../packages/api/Dockerfile

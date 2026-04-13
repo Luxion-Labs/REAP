@@ -1,7 +1,7 @@
 services:
   indexer:
-    container_name: 'counter-indexer'
-    image: 'midnightntwrk/indexer-standalone:2.1.1'
+    container_name: 'reap-indexer'
+    image: 'midnightntwrk/indexer-standalone:3.0.0'
     ports:
       - '0:8088'
     environment:
