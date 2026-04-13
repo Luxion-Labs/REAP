@@ -1,6 +1,6 @@
 // Audit Log API - Event logging and tracking
 
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
 import { createContractProviders, loadContractModule } from "../utils/providers.js";
 import { CONTRACT_PATHS } from "../config/network.js";
 
@@ -20,11 +20,11 @@ export enum EventType {
 }
 
 export class AuditLogAPI {
-  private wallet: Wallet;
+  private wallet: any;
   private contractAddress: string;
   private contract: any;
 
-  constructor(wallet: Wallet, contractAddress: string) {
+  constructor(wallet: any, contractAddress: string) {
     this.wallet = wallet;
     this.contractAddress = contractAddress;
   }

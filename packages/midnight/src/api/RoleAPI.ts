@@ -1,6 +1,6 @@
 // Role contract API - User role management
 
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
 import { createContractProviders, loadContractModule } from "../utils/providers.js";
 import { CONTRACT_PATHS } from "../config/network.js";
 
@@ -11,11 +11,11 @@ export enum Role {
 }
 
 export class RoleAPI {
-  private wallet: Wallet;
+  private wallet: any;
   private contractAddress: string;
   private contract: any;
 
-  constructor(wallet: Wallet, contractAddress: string) {
+  constructor(wallet: any, contractAddress: string) {
     this.wallet = wallet;
     this.contractAddress = contractAddress;
   }

@@ -1,17 +1,17 @@
 // Marketplace API for frontend integration
 
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
 import { createContractProviders, loadContractModule } from "../utils/providers.js";
 import { CONTRACT_PATHS } from "../config/network.js";
 import type { ListingData, ListingStatus } from "../types/contracts.js";
 
 export class MarketplaceAPI {
-  private wallet: Wallet;
+  private wallet: any;
   private contractAddress: string;
   private contract: any;
   private providers: any;
 
-  constructor(wallet: Wallet, contractAddress: string) {
+  constructor(wallet: any, contractAddress: string) {
     this.wallet = wallet;
     this.contractAddress = contractAddress;
   }
