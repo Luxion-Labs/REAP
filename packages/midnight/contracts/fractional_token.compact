@@ -1,6 +1,6 @@
 // fractional_token.compact -> It implements ERC20 style fungible token for property fractionalization, manages token supply, transfers, burning and property linking also supports different token state management.
 
-pragma language_version >= 0.16 && <= 0.21;
+pragma language_version >= 0.16 && <= 0.30;
 
 import CompactStandardLibrary;
 
@@ -106,7 +106,7 @@ export circuit mint(
 // Burn tokens - admin only
 // Removes tokens from circulation
 export circuit burn(
-    from: Bytes<32>,
+    sender: Bytes<32>,
     amount: Uint<64>,
     caller: Bytes<32>
 ): [] {
@@ -114,16 +114,16 @@ export circuit burn(
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
     assert(disclose(caller) == token_admin, "Only admin can burn");
-    assert(balances.member(disclose(from)), "Holder has no balance");
+    assert(balances.member(disclose(sender)), "Holder has no balance");
 
-    const current_balance = balances.lookup(disclose(from));
+    const current_balance = balances.lookup(disclose(sender));
     assert(current_balance >= disclose(amount), "Insufficient balance to burn");
 
-    balances.insert(disclose(from), (current_balance - disclose(amount)) as Uint<64>);
+    balances.insert(disclose(sender), (current_balance - disclose(amount)) as Uint<64>);
 
     // Update holder history
-    const holder_txn_count = holder_history.lookup(disclose(from));
-    holder_history.insert(disclose(from), (holder_txn_count + 1) as Uint<64>);
+    const holder_txn_count = holder_history.lookup(disclose(sender));
+    holder_history.insert(disclose(sender), (holder_txn_count + 1) as Uint<64>);
 
     total_supply = (total_supply - disclose(amount)) as Uint<64>;
     circulating_supply = (circulating_supply - disclose(amount)) as Uint<64>;
@@ -136,7 +136,7 @@ export circuit burn(
 // Transfer tokens between holders
 // Standard ERC20-style transfer — caller must be the sender
 export circuit transfer(
-    from: Bytes<32>,
+    sender: Bytes<32>,
     to: Bytes<32>,
     amount: Uint<64>,
     caller: Bytes<32>
@@ -144,10 +144,10 @@ export circuit transfer(
     assert(token_initialized, "Token not initialized");
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
-    assert(disclose(caller) == disclose(from) || disclose(caller) == token_admin, "Not authorized to transfer");
-    assert(balances.member(disclose(from)), "Sender has no balance");
+    assert(disclose(caller) == disclose(sender) || disclose(caller) == token_admin, "Not authorized to transfer");
+    assert(balances.member(disclose(sender)), "Sender has no balance");
 
-    const from_balance = balances.lookup(disclose(from));
+    const from_balance = balances.lookup(disclose(sender));
     assert(from_balance >= disclose(amount), "Insufficient balance");
 
     const to_balance = balances.member(disclose(to))
@@ -155,7 +155,7 @@ export circuit transfer(
         : 0 as Uint<64>;
 
     // Execute transfer
-    balances.insert(disclose(from), (from_balance - disclose(amount)) as Uint<64>);
+    balances.insert(disclose(sender), (from_balance - disclose(amount)) as Uint<64>);
     balances.insert(disclose(to), (to_balance + disclose(amount)) as Uint<64>);
 
     // Track new holders
@@ -165,8 +165,8 @@ export circuit transfer(
     }
 
     // Update holder history for both parties
-    const from_txn_count = holder_history.lookup(disclose(from));
-    holder_history.insert(disclose(from), (from_txn_count + 1) as Uint<64>);
+    const from_txn_count = holder_history.lookup(disclose(sender));
+    holder_history.insert(disclose(sender), (from_txn_count + 1) as Uint<64>);
 
     const to_txn_count = holder_history.member(disclose(to))
         ? holder_history.lookup(disclose(to))

@@ -1,6 +1,6 @@
 // property_registry.compact -> Manages property registration, status tracking, and ownership transfer and also Provides comprehensive property lifecycle management with verification hooks
 
-pragma language_version >= 0.16 && <= 0.21;
+pragma language_version >= 0.16 && <= 0.30;
 
 import CompactStandardLibrary;
 

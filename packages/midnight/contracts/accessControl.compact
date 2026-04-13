@@ -1,6 +1,6 @@
 // access_control.compact -> Manages permissions, permissions groups, and access control lists, Provides fine-grained access control for contract operations, Implements role-based and permission-based authorization checks
 
-pragma language_version >= 0.16 && <= 0.21;
+pragma language_version >= 0.16 && <= 0.30;
 
 import CompactStandardLibrary;
 

@@ -1,6 +1,6 @@
 // verification.compact -> It manages property verification requests and approvals, coordinates between property owners and professional verifiers and tracks verification status and maintains audit trail
 
-pragma language_version >= 0.16 && <= 0.21;
+pragma language_version >= 0.16 && <= 0.30;
 
 import CompactStandardLibrary;
 

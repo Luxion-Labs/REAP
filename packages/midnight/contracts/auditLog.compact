@@ -1,6 +1,6 @@
 // audit_log.compact -> Records all system events and transactions for audit trail, Provides immutable event logging for compliance and transparency, Enables comprehensive system activity tracking and analysis
 
-pragma language_version >= 0.16 && <= 0.21;
+pragma language_version >= 0.16 && <= 0.30;
 
 import CompactStandardLibrary;
 
