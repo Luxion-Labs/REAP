@@ -2,14 +2,14 @@
 // Complete deployment script for all BrickChain contracts
 
 import { WalletBuilder } from "@midnight-ntwrk/wallet";
-import { setNetworkId, NetworkId, getZswapNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import { setNetworkId, getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { nativeToken } from "@midnight-ntwrk/ledger";
 import { WebSocket } from "ws";
 import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline/promises";
 import * as Rx from "rxjs";
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
 import { deployAllContracts } from "./deployer.js";
 import { TESTNET_CONFIG } from "../config/network.js";
 
@@ -18,21 +18,21 @@ import { TESTNET_CONFIG } from "../config/network.js";
 globalThis.WebSocket = WebSocket;
 
 // Configure for Midnight Testnet
-setNetworkId(NetworkId.TestNet);
+setNetworkId("TestNet");
 
-const waitForFunds = (wallet: Wallet) =>
+const waitForFunds = (wallet: any) =>
   Rx.firstValueFrom(
     wallet.state().pipe(
-      Rx.tap((state) => {
+      Rx.tap((state: any) => {
         if (state.syncProgress) {
           console.log(
             `Sync progress: synced=${state.syncProgress.synced}, sourceGap=${state.syncProgress.lag.sourceGap}, applyGap=${state.syncProgress.lag.applyGap}`
           );
         }
       }),
-      Rx.filter((state) => state.syncProgress?.synced === true),
-      Rx.map((s) => s.balances[nativeToken()] ?? 0n),
-      Rx.filter((balance) => balance > 0n),
+      Rx.filter((state: any) => state.syncProgress?.synced === true),
+      Rx.map((s: any) => s.balances[nativeToken()] ?? 0n),
+      Rx.filter((balance: any) => balance > 0n),
       Rx.tap((balance) => console.log(`Wallet funded with balance: ${balance}`))
     )
   );
@@ -47,7 +47,7 @@ async function main() {
     output: process.stdout,
   });
 
-  let wallet: Wallet | undefined;
+  let wallet: any | undefined;
 
   try {
     // Get or generate wallet seed
@@ -72,11 +72,11 @@ async function main() {
       TESTNET_CONFIG.proofServer,
       TESTNET_CONFIG.node,
       walletSeed,
-      getZswapNetworkId(),
+      "preprod" as any,
       "info"
     );
 
-    const state = await Rx.firstValueFrom(wallet.state());
+    const state = await Rx.firstValueFrom(wallet.state()) as any;
 
     console.log(` Wallet address: ${state.address}`);
 

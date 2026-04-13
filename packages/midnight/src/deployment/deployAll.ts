@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Deploy all BrickChain contracts to Midnight Testnet
 
-import { setNetworkId, NetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { WebSocket } from "ws";
 import * as readline from "readline/promises";
 import { buildWallet, generateWalletSeed, waitForFunds, getWalletAddress, getWalletBalance } from "../utils/wallet.js";
@@ -14,8 +14,8 @@ import * as path from "path";
 // @ts-ignore
 globalThis.WebSocket = WebSocket;
 
-// Configure for Midnight Testnet
-setNetworkId(NetworkId.TestNet);
+// Configure for Midnight Testnet (string network ID)
+setNetworkId("preprod");
 
 async function main() {
   console.log(" BrickChain Midnight Deployment\n");

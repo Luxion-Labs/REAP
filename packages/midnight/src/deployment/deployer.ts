@@ -1,7 +1,7 @@
 // Contract deployment orchestrator
 
 import { deployContract } from "@midnight-ntwrk/midnight-js-contracts";
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
 import { createContractProviders, loadContractModule } from "../utils/providers.js";
 import { CONTRACT_PATHS, type ContractName } from "../config/network.js";
 import type { DeploymentInfo } from "../types/contracts.js";
@@ -10,7 +10,7 @@ import * as path from "path";
 import * as Rx from "rxjs";
 
 export interface DeploymentOptions {
-  wallet: Wallet;
+  wallet: any;
   contractName: ContractName;
   initialState?: any;
   privateStateId?: string;
@@ -31,16 +31,16 @@ export async function deployContractByName(
   const contractInstance = new ContractModule.Contract(initialState);
 
   // Create providers - ensure wallet state is loaded first
-  const walletState = await Rx.firstValueFrom(wallet.state());
+  const walletState = await Rx.firstValueFrom(wallet.state()) as any;
   const providers = await createContractProviders(wallet, contractPath, stateId);
 
   // Deploy contract
   console.log(` Deploying (this may take 30-60 seconds)`);
-  const deployed = await deployContract(providers, {
-    contract: contractInstance,
+  const deployed = await deployContract(providers as any, {
+    compiledContract: contractInstance,
     privateStateId: stateId,
     initialPrivateState: {},
-  });
+  } as any);
 
   const contractAddress = deployed.deployTxData.public.contractAddress;
   console.log(` ${contractName} deployed at: ${contractAddress}`);
@@ -49,7 +49,7 @@ export async function deployContractByName(
     contractAddress,
     deployedAt: new Date().toISOString(),
     networkId: "TestNet",
-    deployer: walletState.address,
+    deployer: (walletState as any).address || "unknown",
   };
 
   return deploymentInfo;
@@ -79,7 +79,7 @@ export function loadDeploymentInfo(contractName: string): DeploymentInfo | null 
   return JSON.parse(data);
 }
 
-export async function deployAllContracts(wallet: Wallet): Promise<Record<ContractName, DeploymentInfo>> {
+export async function deployAllContracts(wallet: any): Promise<Record<ContractName, DeploymentInfo>> {
   const deployments: Partial<Record<ContractName, DeploymentInfo>> = {};
 
   // Deploy in order of dependencies
