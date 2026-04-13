@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Example: Complete property transaction flow
 
-import { setNetworkId, NetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { WebSocket } from "ws";
 import { BrickChainClient } from "../client/BrickChainClient.js";
 import { PropertyStatus, ListingStatus } from "../types/contracts.js";
@@ -14,7 +14,7 @@ import * as Rx from "rxjs";
 globalThis.WebSocket = WebSocket;
 
 // Configure for Midnight Testnet
-setNetworkId(NetworkId.TestNet);
+setNetworkId("preprod");
 
 async function main() {
   console.log(" BrickChain Complete Flow Example\n");
@@ -34,7 +34,7 @@ async function main() {
   await client.initialize();
 
   const wallet = client.getWallet();
-  const state = await Rx.firstValueFrom(wallet.state());
+  const state = await Rx.firstValueFrom(wallet.state()) as any;
   const userAddress = state.address;
 
   console.log(` User address: ${userAddress}\n`);
@@ -70,11 +70,11 @@ async function main() {
 
     // Step 4: Tokenize property
     console.log(" Step 4: Tokenizing property...");
-    await client.fractionalToken.registerProperty(propertyId, userAddress);
-    await client.fractionalToken.tokenizeProperty(propertyId, 1);
+    await client.fractionalToken.registerProperty(propertyId, userAddress, userAddress);
+    await client.fractionalToken.tokenizeProperty(propertyId, "1", userAddress);
     
     // Mint fractional tokens (1000 tokens representing property shares)
-    await client.fractionalToken.mint(userAddress, 1000n);
+    await client.fractionalToken.mint(userAddress, 1000n, userAddress);
     console.log(` Property tokenized with 1000 fractional tokens\n`);
 
     // Step 5: Create marketplace listing
