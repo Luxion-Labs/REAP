@@ -1,6 +1,6 @@
 //marketplace.compact -> Manages property listings, sales, and fee collection, Provides secure listing management with comprehensive status tracking & Supports price updates, cancellations, and transaction history
 
-pragma language_version >= 0.22.0;
+pragma language_version >= 0.16 && <= 0.21;
 
 import CompactStandardLibrary;
 

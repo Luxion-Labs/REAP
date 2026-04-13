@@ -1,6 +1,6 @@
 // escrow.compact -> Manages secure fund escrow for property transactions, Handles deposit, hold, release, and dispute resolution for payments, Implements trusted third-party escrow for buyer/seller protection
 
-pragma language_version >= 0.22.0;
+pragma language_version >= 0.16 && <= 0.21;
 
 import CompactStandardLibrary;
 

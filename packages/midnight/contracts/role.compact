@@ -1,6 +1,6 @@
 // role.compact -> This contract manages user roles and permissions in the BrickChain system, Supports USER, ADMIN, and MODERATOR roles with proper authorization checks
 
-pragma language_version >= 0.22.0;
+pragma language_version >= 0.16 && <= 0.21;
 
 import CompactStandardLibrary;
 

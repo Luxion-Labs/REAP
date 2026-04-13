@@ -1,6 +1,6 @@
 // fractional_token.compact -> It implements ERC20 style fungible token for property fractionalization, manages token supply, transfers, burning and property linking also supports different token state management.
 
-pragma language_version >= 0.22.0;
+pragma language_version >= 0.16 && <= 0.21;
 
 import CompactStandardLibrary;
 

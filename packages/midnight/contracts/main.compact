@@ -1,6 +1,6 @@
 // main.compact -> Central orchestrator for the BrickChain system And manages system state, initialization, emergency controls, and version tracking And acts as the primary entry point for system-wide operations
 
-pragma language_version >= 0.22.0;
+pragma language_version >= 0.16 && <= 0.21;
 
 import CompactStandardLibrary;
 

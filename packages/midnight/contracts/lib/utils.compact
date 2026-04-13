@@ -1,6 +1,6 @@
 // utils.compact -> Common utility functions for the BrickChain system, Provides reusable validation, calculation, and state management utilities
 
-pragma language_version >= 0.22.0;
+pragma language_version >= 0.16 && <= 0.21;
 
 import CompactStandardLibrary;
 
