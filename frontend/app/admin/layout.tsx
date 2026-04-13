@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AdminSidebar } from "@/app/admin/admin-sidebar"
 import { AdminHeader } from "@/app/admin/admin-header"
 import { WalletProvider } from "@/components/providers/wallet-provider"
+import { ContractProvider } from "@/components/providers/contract-provider"
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   return (
@@ -26,9 +27,11 @@ export default function AdminLayout({
 }) {
   return (
     <WalletProvider>
-      <AdminLayoutInner>
-        {children}
-      </AdminLayoutInner>
+      <ContractProvider>
+        <AdminLayoutInner>
+          {children}
+        </AdminLayoutInner>
+      </ContractProvider>
     </WalletProvider>
   )
 }
