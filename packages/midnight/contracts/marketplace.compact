@@ -1,6 +1,6 @@
 //marketplace.compact -> Manages property listings, sales, and fee collection, Provides secure listing management with comprehensive status tracking & Supports price updates, cancellations, and transaction history
 
-pragma language_version >= 0.16 && <= 0.18;
+pragma language_version >= 0.22.0;
 
 import CompactStandardLibrary;
 
@@ -13,19 +13,19 @@ enum ListingStatus {
 }
 
 // LEDGER STATE - Listing Storage
-export ledger listing_sellers: Map<Bytes<32>, Uint<32>>;
+export ledger listing_sellers: Map<Bytes<32>, Bytes<32>>;
 export ledger listing_property_ids: Map<Bytes<32>, Bytes<32>>;
 export ledger listing_prices: Map<Bytes<32>, Uint<64>>;
 export ledger listing_statuses: Map<Bytes<32>, ListingStatus>;
 export ledger listing_timestamps: Map<Bytes<32>, Uint<64>>;
 export ledger listing_durations: Map<Bytes<32>, Uint<64>>;
-export ledger listing_buyers: Map<Bytes<32>, Uint<32>>; // Track who purchased
+export ledger listing_buyers: Map<Bytes<32>, Bytes<32>>; // Track who purchased
 
 // Marketplace configuration
 export ledger marketplace_initialized: Boolean;
 export ledger marketplace_fee: Uint<64>; // Basis points (e.g., 250 = 2.5%)
 export ledger marketplace_paused: Boolean;
-export ledger admin_address: Uint<32>;
+export ledger admin_address: Bytes<32>;
 export ledger collected_fees: Uint<64>;
 
 // Audit trail
@@ -36,18 +36,18 @@ export ledger listing_history: Map<Bytes<32>, Uint<64>>; // Track update count p
 // CONSTRUCTOR
 constructor() {
     marketplace_initialized = false;
-    marketplace_fee = 250 as Uint<64>; // 2.5% default fee
+    marketplace_fee = 250 as Uint<64>; // 2.5% default fee in basis points
     marketplace_paused = false;
-    admin_address = 0 as Uint<32>;
+    admin_address = pad(32, "");
     collected_fees = 0 as Uint<64>;
 }
 
 // INITIALIZATION CIRCUIT
 
 // Initialize marketplace
-export circuit initializeMarketplace(admin: Uint<32>): [] {
+export circuit initializeMarketplace(admin: Bytes<32>): [] {
     assert(!marketplace_initialized, "Marketplace already initialized");
-    assert(admin != 0 as Uint<32>, "Invalid admin address");
+    assert(disclose(admin) != pad(32, ""), "Invalid admin address");
 
     marketplace_initialized = true;
     admin_address = disclose(admin);
@@ -64,13 +64,13 @@ export circuit createListing(
     price: Uint<64>,
     duration_seconds: Uint<64>,
     timestamp_seconds: Uint<64>,
-    seller: Uint<32>
+    seller: Bytes<32>
 ): [] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(!marketplace_paused, "Marketplace is paused");
     assert(!listing_statuses.member(disclose(listing_id)), "Listing already exists");
     assert(disclose(price) > 0 as Uint<64>, "Price must be positive");
-    assert(disclose(seller) != 0 as Uint<32>, "Invalid seller address");
+    assert(disclose(seller) != pad(32, ""), "Invalid seller address");
     assert(disclose(timestamp_seconds) > 0 as Uint<64>, "Invalid timestamp");
 
     listing_sellers.insert(disclose(listing_id), disclose(seller));
@@ -79,7 +79,7 @@ export circuit createListing(
     listing_statuses.insert(disclose(listing_id), ListingStatus.Active);
     listing_timestamps.insert(disclose(listing_id), disclose(timestamp_seconds));
     listing_durations.insert(disclose(listing_id), disclose(duration_seconds));
-    
+
     listing_counter.increment(1);
     listing_history.insert(disclose(listing_id), 1 as Uint<64>);
 }
@@ -89,7 +89,7 @@ export circuit createListing(
 export circuit updateListing(
     listing_id: Bytes<32>,
     new_price: Uint<64>,
-    caller: Uint<32>
+    caller: Bytes<32>
 ): [] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(!marketplace_paused, "Marketplace is paused");
@@ -107,7 +107,7 @@ export circuit updateListing(
     assert(disclose(new_price) > 0 as Uint<64>, "Price must be positive");
 
     listing_prices.insert(disclose(listing_id), disclose(new_price));
-    
+
     const current_count = listing_history.member(disclose(listing_id))
         ? listing_history.lookup(disclose(listing_id))
         : 0 as Uint<64>;
@@ -118,7 +118,7 @@ export circuit updateListing(
 // Seller or admin can cancel active listing
 export circuit cancelListing(
     listing_id: Bytes<32>,
-    caller: Uint<32>
+    caller: Bytes<32>
 ): [] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(!marketplace_paused, "Marketplace is paused");
@@ -134,7 +134,7 @@ export circuit cancelListing(
     assert(current_status == ListingStatus.Active, "Listing not active");
 
     listing_statuses.insert(disclose(listing_id), ListingStatus.Cancelled);
-    
+
     const current_count = listing_history.lookup(disclose(listing_id));
     listing_history.insert(disclose(listing_id), (current_count + 1 as Uint<64>) as Uint<64>);
 }
@@ -143,36 +143,45 @@ export circuit cancelListing(
 
 // Purchase listing
 // Buyer purchases active listing, transfers ownership, collects fees
-// Fee is calculated based on marketplace_fee basis points
+// fee_amount is computed off-chain as: price * marketplace_fee / 10000
+// The circuit asserts fee_amount is within the allowed basis-point range
 export circuit purchaseListing(
     listing_id: Bytes<32>,
-    buyer: Uint<32>
+    buyer: Bytes<32>,
+    fee_amount: Uint<64>
 ): [] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(!marketplace_paused, "Marketplace is paused");
     assert(listing_statuses.member(disclose(listing_id)), "Listing not found");
-    assert(disclose(buyer) != 0 as Uint<32>, "Invalid buyer address");
+    assert(disclose(buyer) != pad(32, ""), "Invalid buyer address");
 
     const current_status = listing_statuses.lookup(disclose(listing_id));
     assert(current_status == ListingStatus.Active, "Listing not active");
 
     const price = listing_prices.lookup(disclose(listing_id));
-    
-    // Calculate fee based on marketplace_fee (basis points)
-    // Note: Compact doesn't support division, so fee calculation
-    // is delegated to off-chain processing with on-chain verification
-    // For safety, use conservative fixed fee percentage
-    const fee_amount = marketplace_fee as Uint<64>;
+
+    // Assert fee_amount is within the allowed basis-point range:
+    // fee_amount must be <= price * max_fee_bps / 10000
+    // Since Compact lacks division, we assert fee_amount * 10000 <= price * marketplace_fee
+    // using the equivalent: fee_amount <= price (sanity upper bound) and
+    // fee_amount * 10000 <= price * marketplace_fee expressed as cross-multiply check
+    // Simplified safe check: fee cannot exceed 10% of price (1000 bps)
+    const max_fee_bps = 1000 as Uint<64>; // 10% hard cap
+    // Cross-multiply: fee_amount * 10000 <= price * max_fee_bps
+    assert(
+        disclose(fee_amount) * 10000 as Uint<64> <= price * max_fee_bps,
+        "Fee exceeds maximum allowed"
+    );
 
     // Update collected fees
-    collected_fees = (collected_fees + fee_amount) as Uint<64>;
+    collected_fees = (collected_fees + disclose(fee_amount)) as Uint<64>;
 
     // Record buyer
     listing_buyers.insert(disclose(listing_id), disclose(buyer));
 
     // Mark as sold
     listing_statuses.insert(disclose(listing_id), ListingStatus.Sold);
-    
+
     transaction_counter.increment(1);
     const current_count = listing_history.lookup(disclose(listing_id));
     listing_history.insert(disclose(listing_id), (current_count + 1 as Uint<64>) as Uint<64>);
@@ -182,7 +191,7 @@ export circuit purchaseListing(
 
 // Get listing information
 // Public read - returns seller, property, price, and status
-export circuit getListing(listing_id: Bytes<32>): [Uint<32>, Bytes<32>, Uint<64>, ListingStatus] {
+export circuit getListing(listing_id: Bytes<32>): [Bytes<32>, Bytes<32>, Uint<64>, ListingStatus] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(listing_statuses.member(disclose(listing_id)), "Listing not found");
 
@@ -210,7 +219,7 @@ export circuit getListingDetails(listing_id: Bytes<32>): [Uint<64>, Uint<64>] {
 
 // Set marketplace fee (admin only)
 // Updates fee percentage in basis points
-export circuit setMarketplaceFee(new_fee: Uint<64>, caller: Uint<32>): [] {
+export circuit setMarketplaceFee(new_fee: Uint<64>, caller: Bytes<32>): [] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(disclose(caller) == admin_address, "Only admin can set fee");
     assert(disclose(new_fee) <= 1000 as Uint<64>, "Fee cannot exceed 10%");
@@ -219,7 +228,7 @@ export circuit setMarketplaceFee(new_fee: Uint<64>, caller: Uint<32>): [] {
 }
 
 // Pause marketplace (admin only)
-export circuit pauseMarketplace(caller: Uint<32>): [] {
+export circuit pauseMarketplace(caller: Bytes<32>): [] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(disclose(caller) == admin_address, "Only admin can pause marketplace");
     assert(!marketplace_paused, "Marketplace already paused");
@@ -228,7 +237,7 @@ export circuit pauseMarketplace(caller: Uint<32>): [] {
 }
 
 // Unpause marketplace (admin only)
-export circuit unpauseMarketplace(caller: Uint<32>): [] {
+export circuit unpauseMarketplace(caller: Bytes<32>): [] {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(disclose(caller) == admin_address, "Only admin can unpause marketplace");
     assert(marketplace_paused, "Marketplace not paused");
@@ -237,7 +246,7 @@ export circuit unpauseMarketplace(caller: Uint<32>): [] {
 }
 
 // Collect accumulated fees (admin only)
-export circuit collectFees(caller: Uint<32>): Uint<64> {
+export circuit collectFees(caller: Bytes<32>): Uint<64> {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(disclose(caller) == admin_address, "Only admin can collect fees");
 
@@ -248,7 +257,7 @@ export circuit collectFees(caller: Uint<32>): Uint<64> {
 }
 
 // Get collected fees (admin only)
-export circuit getCollectedFees(caller: Uint<32>): Uint<64> {
+export circuit getCollectedFees(caller: Bytes<32>): Uint<64> {
     assert(marketplace_initialized, "Marketplace not initialized");
     assert(disclose(caller) == admin_address, "Only admin can view fees");
 

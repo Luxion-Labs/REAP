@@ -1,24 +1,24 @@
 // utils.compact -> Common utility functions for the BrickChain system, Provides reusable validation, calculation, and state management utilities
 
-pragma language_version >= 0.16 && <= 0.18;
+pragma language_version >= 0.22.0;
 
 import CompactStandardLibrary;
 
 // AUTHORIZATION UTILITIES
 
 // Verify caller has authorization
-export circuit verifyAuthorization(caller: Uint<32>, authorized_user: Uint<32>): [] {
-    assert(caller == authorized_user, "Caller not authorized for this operation");
+export circuit verifyAuthorization(caller: Bytes<32>, authorized_user: Bytes<32>): [] {
+    assert(disclose(caller) == disclose(authorized_user), "Caller not authorized for this operation");
 }
 
 // Verify caller is admin (using privacy-preserving disclose)
-export circuit verifyAdminAuthorization(caller: Uint<32>, admin: Uint<32>): [] {
-    assert(caller == admin, "Only admin can perform this action");
+export circuit verifyAdminAuthorization(caller: Bytes<32>, admin: Bytes<32>): [] {
+    assert(disclose(caller) == disclose(admin), "Only admin can perform this action");
 }
 
 // Verify two addresses match
-export circuit verifyAddressMatch(address1: Uint<32>, address2: Uint<32>): Boolean {
-    return address1 == address2;
+export circuit verifyAddressMatch(address1: Bytes<32>, address2: Bytes<32>): Boolean {
+    return disclose(address1) == disclose(address2);
 }
 
 // STATE TRANSITION UTILITIES
@@ -30,10 +30,10 @@ export circuit isValidStateTransition(from_state: Uint<8>, to_state: Uint<8>): B
 }
 
 // Get human-readable state name
-export circuit getStateName(state: Uint<8>): Uint<32> {
+export circuit getStateName(state: Uint<8>): Uint<64> {
     // In production, this would map to strings
     // For now, return state code
-    return state as Uint<32>;
+    return state as Uint<64>;
 }
 
 // TIMESTAMP UTILITIES
@@ -100,7 +100,7 @@ export circuit decrementCounter(current_count: Uint<64>): Uint<64> {
 // HASH AND ENCODING UTILITIES
 
 // Generate event ID from hash inputs
-export circuit generateEventId(contract: Uint<32>, action: Uint<8>, nonce: Uint<64>): Bytes<32> {
+export circuit generateEventId(contract: Bytes<32>, action: Uint<8>, nonce: Uint<64>): Bytes<32> {
     // In production, this would hash the inputs
     // For now, encode as placeholder
     return 0x0000000000000000000000000000000000000000000000000000000000000000 as Bytes<32>;
@@ -155,8 +155,8 @@ export circuit safeMul(a: Uint<64>, b: Uint<64>): Uint<64> {
 // COMMON ASSERTIONS
 
 // Assert address is not zero
-export circuit requireNonZeroAddress(address: Uint<32>): [] {
-    assert(address != 0 as Uint<32>, "Address cannot be zero");
+export circuit requireNonZeroAddress(address: Bytes<32>): [] {
+    assert(disclose(address) != pad(32, ""), "Address cannot be zero");
 }
 
 // Assert amount is positive
@@ -165,8 +165,8 @@ export circuit requirePositiveAmount(amount: Uint<64>): [] {
 }
 
 // Assert addresses match
-export circuit requireAddressMatch(address1: Uint<32>, address2: Uint<32>): [] {
-    assert(address1 == address2, "Address mismatch");
+export circuit requireAddressMatch(address1: Bytes<32>, address2: Bytes<32>): [] {
+    assert(disclose(address1) == disclose(address2), "Address mismatch");
 }
 
 // Assert condition is true

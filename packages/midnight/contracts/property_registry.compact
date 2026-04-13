@@ -1,6 +1,6 @@
 // property_registry.compact -> Manages property registration, status tracking, and ownership transfer and also Provides comprehensive property lifecycle management with verification hooks
 
-pragma language_version >= 0.16 && <= 0.18;
+pragma language_version >= 0.22.0;
 
 import CompactStandardLibrary;
 
@@ -16,7 +16,7 @@ enum PropertyStatus {
 
 // LEDGER STATE - Property Storage
 // Core property data mapped by property_id (Bytes<32>)
-export ledger property_owners: Map<Bytes<32>, Uint<32>>;
+export ledger property_owners: Map<Bytes<32>, Bytes<32>>;
 export ledger property_statuses: Map<Bytes<32>, PropertyStatus>;
 export ledger property_values: Map<Bytes<32>, Uint<64>>;
 export ledger property_locations: Map<Bytes<32>, Bytes<64>>;
@@ -26,7 +26,7 @@ export ledger property_documents: Map<Bytes<32>, Bytes<64>>;
 export ledger registry_initialized: Boolean;
 export ledger registration_fee: Uint<64>;
 export ledger registry_paused: Boolean;
-export ledger admin_address: Uint<32>;
+export ledger admin_address: Bytes<32>;
 export ledger collected_fees: Uint<64>; // Accumulated registration fees
 
 // Audit trail and counters
@@ -38,7 +38,7 @@ constructor() {
     registry_initialized = false;
     registration_fee = 1000000 as Uint<64>;
     registry_paused = false;
-    admin_address = 0 as Uint<32>;
+    admin_address = pad(32, "");
     collected_fees = 0 as Uint<64>;
 }
 
@@ -46,9 +46,9 @@ constructor() {
 
 // Initialize the property registry
 // Sets up admin and enables property registration
-export circuit initializeRegistry(admin: Uint<32>): [] {
+export circuit initializeRegistry(admin: Bytes<32>): [] {
     assert(!registry_initialized, "Registry already initialized");
-    assert(admin != 0 as Uint<32>, "Invalid admin address");
+    assert(disclose(admin) != pad(32, ""), "Invalid admin address");
 
     registry_initialized = true;
     admin_address = disclose(admin);
@@ -60,7 +60,7 @@ export circuit initializeRegistry(admin: Uint<32>): [] {
 // Creates initial property record with owner and valuation
 export circuit registerProperty(
     property_id: Bytes<32>,
-    owner: Uint<32>,
+    owner: Bytes<32>,
     valuation: Uint<64>,
     location_hash: Bytes<64>,
     document_hash: Bytes<64>
@@ -68,7 +68,7 @@ export circuit registerProperty(
     assert(registry_initialized, "Registry not initialized");
     assert(!registry_paused, "Registry is paused");
     assert(!property_statuses.member(disclose(property_id)), "Property already registered");
-    assert(disclose(owner) != 0 as Uint<32>, "Invalid owner address");
+    assert(disclose(owner) != pad(32, ""), "Invalid owner address");
     assert(disclose(valuation) > 0 as Uint<64>, "Invalid valuation");
 
     property_owners.insert(disclose(property_id), disclose(owner));
@@ -76,10 +76,10 @@ export circuit registerProperty(
     property_values.insert(disclose(property_id), disclose(valuation));
     property_locations.insert(disclose(property_id), disclose(location_hash));
     property_documents.insert(disclose(property_id), disclose(document_hash));
-    
+
     // Collect registration fee
     collected_fees = (collected_fees + registration_fee) as Uint<64>;
-    
+
     property_counter.increment(1);
     property_history.insert(disclose(property_id), 1 as Uint<64>);
 }
@@ -91,7 +91,7 @@ export circuit registerProperty(
 export circuit updatePropertyStatus(
     property_id: Bytes<32>,
     new_status: PropertyStatus,
-    caller: Uint<32>
+    caller: Bytes<32>
 ): [] {
     assert(registry_initialized, "Registry not initialized");
     assert(!registry_paused, "Registry is paused");
@@ -104,7 +104,7 @@ export circuit updatePropertyStatus(
     );
 
     property_statuses.insert(disclose(property_id), disclose(new_status));
-    
+
     // Update history
     const current_count = property_history.member(disclose(property_id))
         ? property_history.lookup(disclose(property_id))
@@ -114,7 +114,7 @@ export circuit updatePropertyStatus(
 
 // Get property information
 // Returns owner, status, and valuation
-export circuit getProperty(property_id: Bytes<32>): [Uint<32>, PropertyStatus, Uint<64>] {
+export circuit getProperty(property_id: Bytes<32>): [Bytes<32>, PropertyStatus, Uint<64>] {
     assert(registry_initialized, "Registry not initialized");
     assert(property_statuses.member(disclose(property_id)), "Property not found");
 
@@ -143,8 +143,8 @@ export circuit getPropertyMetadata(property_id: Bytes<32>): [Bytes<64>, Bytes<64
 // Allows current owner or admin to transfer to new owner
 export circuit transferProperty(
     property_id: Bytes<32>,
-    new_owner: Uint<32>,
-    caller: Uint<32>
+    new_owner: Bytes<32>,
+    caller: Bytes<32>
 ): [] {
     assert(registry_initialized, "Registry not initialized");
     assert(!registry_paused, "Registry is paused");
@@ -155,11 +155,11 @@ export circuit transferProperty(
         disclose(caller) == current_owner || disclose(caller) == admin_address,
         "Not authorized to transfer property"
     );
-    assert(disclose(new_owner) != 0 as Uint<32>, "Invalid new owner");
+    assert(disclose(new_owner) != pad(32, ""), "Invalid new owner");
 
     property_owners.insert(disclose(property_id), disclose(new_owner));
     property_statuses.insert(disclose(property_id), PropertyStatus.Sold);
-    
+
     const current_count = property_history.lookup(disclose(property_id));
     property_history.insert(disclose(property_id), (current_count + 1 as Uint<64>) as Uint<64>);
 }
@@ -170,11 +170,12 @@ export circuit transferProperty(
 // Used by verification service to mark properties as verified
 export circuit verifyProperty(
     property_id: Bytes<32>,
-    caller: Uint<32>
+    caller: Bytes<32>
 ): [] {
     assert(registry_initialized, "Registry not initialized");
     assert(!registry_paused, "Registry is paused");
     assert(property_statuses.member(disclose(property_id)), "Property not registered");
+    assert(disclose(caller) == admin_address, "Only admin can verify properties");
 
     const current_status = property_statuses.lookup(disclose(property_id));
     assert(
@@ -183,7 +184,7 @@ export circuit verifyProperty(
     );
 
     property_statuses.insert(disclose(property_id), PropertyStatus.Verified);
-    
+
     const current_count = property_history.lookup(disclose(property_id));
     property_history.insert(disclose(property_id), (current_count + 1 as Uint<64>) as Uint<64>);
 }
@@ -192,7 +193,7 @@ export circuit verifyProperty(
 
 // Set registration fee (admin only)
 // Controls the fee required for property registration
-export circuit setRegistrationFee(new_fee: Uint<64>, caller: Uint<32>): [] {
+export circuit setRegistrationFee(new_fee: Uint<64>, caller: Bytes<32>): [] {
     assert(registry_initialized, "Registry not initialized");
     assert(disclose(caller) == admin_address, "Only admin can set fee");
 
@@ -200,7 +201,7 @@ export circuit setRegistrationFee(new_fee: Uint<64>, caller: Uint<32>): [] {
 }
 
 // Pause registry (admin only)
-export circuit pauseRegistry(caller: Uint<32>): [] {
+export circuit pauseRegistry(caller: Bytes<32>): [] {
     assert(registry_initialized, "Registry not initialized");
     assert(disclose(caller) == admin_address, "Only admin can pause registry");
     assert(!registry_paused, "Registry already paused");
@@ -209,7 +210,7 @@ export circuit pauseRegistry(caller: Uint<32>): [] {
 }
 
 // Unpause registry (admin only)
-export circuit unpauseRegistry(caller: Uint<32>): [] {
+export circuit unpauseRegistry(caller: Bytes<32>): [] {
     assert(registry_initialized, "Registry not initialized");
     assert(disclose(caller) == admin_address, "Only admin can unpause registry");
     assert(registry_paused, "Registry not paused");
@@ -224,12 +225,12 @@ export circuit getCollectedFees(): Uint<64> {
 }
 
 // Withdraw collected registration fees
-export circuit withdrawCollectedFees(caller: Uint<32>): Uint<64> {
+export circuit withdrawCollectedFees(caller: Bytes<32>): Uint<64> {
     assert(registry_initialized, "Registry not initialized");
     assert(disclose(caller) == admin_address, "Only admin can withdraw fees");
 
     const fees_to_withdraw = collected_fees;
     collected_fees = 0 as Uint<64>;
-    
+
     return fees_to_withdraw;
 }

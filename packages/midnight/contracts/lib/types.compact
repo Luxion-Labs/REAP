@@ -1,6 +1,6 @@
 // types.compact -> Common types and utilities for the BrickChain system
 
-pragma language_version >= 0.16 && <= 0.18;
+pragma language_version >= 0.22.0;
 
 import CompactStandardLibrary;
 

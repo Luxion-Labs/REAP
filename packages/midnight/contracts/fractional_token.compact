@@ -1,6 +1,6 @@
 // fractional_token.compact -> It implements ERC20 style fungible token for property fractionalization, manages token supply, transfers, burning and property linking also supports different token state management.
 
-pragma language_version >= 0.16 && <= 0.18;
+pragma language_version >= 0.22.0;
 
 import CompactStandardLibrary;
 
@@ -25,18 +25,22 @@ export ledger circulating_supply: Uint<64>;
 export ledger nonce: Counter; // Transaction counter for state tracking
 
 // Track token balances
-export ledger balances: Map<Uint<32>, Uint<64>>;
+export ledger balances: Map<Bytes<32>, Uint<64>>;
 export ledger token_state: TokenState;
+
+// Admin authorization
+export ledger token_admin: Bytes<32>;
+export ledger token_initialized: Boolean;
 
 // Track token holders and metadata
 export ledger holder_count: Uint<64>;
-export ledger holders: Map<Uint<32>, Boolean>;
-export ledger holder_history: Map<Uint<32>, Uint<64>>; // Track transfers per holder
+export ledger holders: Map<Bytes<32>, Boolean>;
+export ledger holder_history: Map<Bytes<32>, Uint<64>>; // Track transfers per holder
 
 // Property-specific ledgers
 export ledger property_statuses: Map<Bytes<32>, PropertyStatus>;
-export ledger property_owners: Map<Bytes<32>, Uint<32>>;
-export ledger property_token_ids: Map<Bytes<32>, Uint<32>>;
+export ledger property_owners: Map<Bytes<32>, Bytes<32>>;
+export ledger property_token_ids: Map<Bytes<32>, Bytes<32>>;
 export ledger property_history: Map<Bytes<32>, Uint<64>>; // Track property updates
 
 // CONSTRUCTOR
@@ -45,152 +49,175 @@ constructor() {
     circulating_supply = 0;
     token_state = TokenState.Active;
     holder_count = 0;
+    token_admin = pad(32, "");
+    token_initialized = false;
+}
+
+// INITIALIZATION
+
+// Initialize token with admin address
+export circuit initializeToken(admin: Bytes<32>): [] {
+    assert(!token_initialized, "Token already initialized");
+    assert(disclose(admin) != pad(32, ""), "Invalid admin address");
+
+    token_admin = disclose(admin);
+    token_initialized = true;
+    nonce.increment(1);
 }
 
 // TOKEN SUPPLY CIRCUITS
 
-// Mint new tokens
+// Mint new tokens - admin only
 // Creates new tokens and assigns to recipient
 export circuit mint(
-    to: Uint<32>,
-    amount: Uint<64>
+    to: Bytes<32>,
+    amount: Uint<64>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
-    
-    const current_balance = balances.member(disclose(to)) 
-        ? balances.lookup(disclose(to)) 
+    assert(disclose(caller) == token_admin, "Only admin can mint");
+
+    const current_balance = balances.member(disclose(to))
+        ? balances.lookup(disclose(to))
         : 0 as Uint<64>;
-    
+
     balances.insert(disclose(to), (current_balance + disclose(amount)) as Uint<64>);
-    
+
     // Track new holders
     if (!holders.member(disclose(to))) {
         holders.insert(disclose(to), true);
         holder_count = (holder_count + 1) as Uint<64>;
     }
-    
+
     // Update holder history
     const holder_txn_count = holder_history.member(disclose(to))
         ? holder_history.lookup(disclose(to))
         : 0 as Uint<64>;
     holder_history.insert(disclose(to), (holder_txn_count + 1) as Uint<64>);
-    
+
     total_supply = (total_supply + disclose(amount)) as Uint<64>;
     circulating_supply = (circulating_supply + disclose(amount)) as Uint<64>;
-    
+
     nonce.increment(1);
 }
 
-// Burn tokens
+// Burn tokens - admin only
 // Removes tokens from circulation
 export circuit burn(
-    from: Uint<32>,
-    amount: Uint<64>
+    from: Bytes<32>,
+    amount: Uint<64>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
+    assert(disclose(caller) == token_admin, "Only admin can burn");
     assert(balances.member(disclose(from)), "Holder has no balance");
-    
+
     const current_balance = balances.lookup(disclose(from));
     assert(current_balance >= disclose(amount), "Insufficient balance to burn");
-    
+
     balances.insert(disclose(from), (current_balance - disclose(amount)) as Uint<64>);
-    
+
     // Update holder history
     const holder_txn_count = holder_history.lookup(disclose(from));
     holder_history.insert(disclose(from), (holder_txn_count + 1) as Uint<64>);
-    
+
     total_supply = (total_supply - disclose(amount)) as Uint<64>;
     circulating_supply = (circulating_supply - disclose(amount)) as Uint<64>;
-    
+
     nonce.increment(1);
 }
 
 // TRANSFER CIRCUITS
 
 // Transfer tokens between holders
-// Standard ERC20-style transfer
+// Standard ERC20-style transfer — caller must be the sender
 export circuit transfer(
-    from: Uint<32>,
-    to: Uint<32>,
-    amount: Uint<64>
+    from: Bytes<32>,
+    to: Bytes<32>,
+    amount: Uint<64>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
+    assert(disclose(caller) == disclose(from) || disclose(caller) == token_admin, "Not authorized to transfer");
     assert(balances.member(disclose(from)), "Sender has no balance");
-    
+
     const from_balance = balances.lookup(disclose(from));
     assert(from_balance >= disclose(amount), "Insufficient balance");
-    
-    const to_balance = balances.member(disclose(to)) 
-        ? balances.lookup(disclose(to)) 
+
+    const to_balance = balances.member(disclose(to))
+        ? balances.lookup(disclose(to))
         : 0 as Uint<64>;
-    
+
     // Execute transfer
     balances.insert(disclose(from), (from_balance - disclose(amount)) as Uint<64>);
     balances.insert(disclose(to), (to_balance + disclose(amount)) as Uint<64>);
-    
+
     // Track new holders
     if (!holders.member(disclose(to))) {
         holders.insert(disclose(to), true);
         holder_count = (holder_count + 1) as Uint<64>;
     }
-    
+
     // Update holder history for both parties
     const from_txn_count = holder_history.lookup(disclose(from));
     holder_history.insert(disclose(from), (from_txn_count + 1) as Uint<64>);
-    
+
     const to_txn_count = holder_history.member(disclose(to))
         ? holder_history.lookup(disclose(to))
         : 0 as Uint<64>;
     holder_history.insert(disclose(to), (to_txn_count + 1) as Uint<64>);
-    
+
     nonce.increment(1);
 }
 
 // Approve spending
 // Production implementation: Validates owner authorization and approval amount
-// Verifies owner has sufficient balance for approval
-// Real ERC20 tracking: Implement in separate allowance contract for full ledger tracking
 export circuit approve(
-    owner: Uint<32>,
-    spender: Uint<32>,
-    amount: Uint<64>
+    owner: Bytes<32>,
+    spender: Bytes<32>,
+    amount: Uint<64>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
     assert(token_state == TokenState.Active, "Token is not active");
     assert(amount > 0, "Amount must be positive");
-    assert(disclose(owner) != 0 as Uint<32>, "Invalid owner address");
-    assert(disclose(spender) != 0 as Uint<32>, "Invalid spender address");
+    assert(disclose(caller) == disclose(owner), "Only owner can approve");
+    assert(disclose(owner) != pad(32, ""), "Invalid owner address");
+    assert(disclose(spender) != pad(32, ""), "Invalid spender address");
     assert(balances.member(disclose(owner)), "Owner has no balance");
-    
+
     const owner_balance = balances.lookup(disclose(owner));
     assert(owner_balance >= disclose(amount), "Insufficient balance for approval");
-    
-    // Approval validated - spender authorization confirmed
-    // Production ERC20: Track allowances in separate Map: allowances[owner][spender] = amount
-    // Current: Validates approval preconditions
-    // Bridge contract layer handles actual allowance ledger management
-    
+
     nonce.increment(1);
 }
 
 // TOKEN STATE MANAGEMENT
 
-// Pause token operations
+// Pause token operations - admin only
 // Freezes all transfer, mint, and burn operations
-export circuit pause_token(): [] {
+export circuit pause_token(caller: Bytes<32>): [] {
+    assert(token_initialized, "Token not initialized");
+    assert(disclose(caller) == token_admin, "Only admin can pause token");
     assert(token_state == TokenState.Active, "Token not in active state");
-    
+
     token_state = TokenState.Paused;
     nonce.increment(1);
 }
 
-// Unpause token operations
+// Unpause token operations - admin only
 // Resumes normal operation after pause
-export circuit unpause_token(): [] {
+export circuit unpause_token(caller: Bytes<32>): [] {
+    assert(token_initialized, "Token not initialized");
+    assert(disclose(caller) == token_admin, "Only admin can unpause token");
     assert(token_state == TokenState.Paused, "Token is not paused");
-    
+
     token_state = TokenState.Active;
     nonce.increment(1);
 }
@@ -198,7 +225,7 @@ export circuit unpause_token(): [] {
 // QUERY CIRCUITS
 
 // Get balance of holder
-export circuit balanceOf(holder: Uint<32>): Uint<64> {
+export circuit balanceOf(holder: Bytes<32>): Uint<64> {
     if (balances.member(disclose(holder))) {
         return balances.lookup(disclose(holder));
     } else {
@@ -223,85 +250,97 @@ export circuit getTokenState(): TokenState {
 
 // PROPERTY TOKENIZATION CIRCUITS
 
-// Register property for tokenization
+// Register property for tokenization - admin only
 export circuit register_property(
     property_id: Bytes<32>,
-    owner_id: Uint<32>
+    owner_id: Bytes<32>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
+    assert(disclose(caller) == token_admin, "Only admin can register properties");
     assert(!property_statuses.member(disclose(property_id)), "Property already registered");
-    
+
     property_statuses.insert(disclose(property_id), PropertyStatus.Registered);
     property_owners.insert(disclose(property_id), disclose(owner_id));
     property_history.insert(disclose(property_id), 1 as Uint<64>);
-    
+
     nonce.increment(1);
 }
 
-// Tokenize property
+// Tokenize property - admin only
 // Transitions property from Registered to Tokenized state
 export circuit tokenize_property(
     property_id: Bytes<32>,
-    token_id: Uint<32>
+    token_id: Bytes<32>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
+    assert(disclose(caller) == token_admin, "Only admin can tokenize properties");
     assert(property_statuses.member(disclose(property_id)), "Property not registered");
-    
+
     const current_status = property_statuses.lookup(disclose(property_id));
     assert(current_status == PropertyStatus.Registered, "Property not in Registered state");
-    
+
     property_statuses.insert(disclose(property_id), PropertyStatus.Tokenized);
     property_token_ids.insert(disclose(property_id), disclose(token_id));
-    
+
     const history_count = property_history.lookup(disclose(property_id));
     property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
-    
+
     nonce.increment(1);
 }
 
-// Transfer property ownership
+// Transfer property ownership - admin only
 export circuit transfer_property_ownership(
     property_id: Bytes<32>,
-    new_owner_id: Uint<32>
+    new_owner_id: Bytes<32>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
+    assert(disclose(caller) == token_admin, "Only admin can transfer property ownership");
     assert(property_statuses.member(disclose(property_id)), "Property not registered");
-    assert(disclose(new_owner_id) != 0 as Uint<32>, "Invalid new owner");
-    
+    assert(disclose(new_owner_id) != pad(32, ""), "Invalid new owner");
+
     property_owners.insert(disclose(property_id), disclose(new_owner_id));
     property_statuses.insert(disclose(property_id), PropertyStatus.Transferred);
-    
+
     const history_count = property_history.lookup(disclose(property_id));
     property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
-    
+
     nonce.increment(1);
 }
 
-// Deactivate property
+// Deactivate property - admin only
 // Removes property from active circulation
 export circuit deactivate_property(
-    property_id: Bytes<32>
+    property_id: Bytes<32>,
+    caller: Bytes<32>
 ): [] {
+    assert(token_initialized, "Token not initialized");
+    assert(disclose(caller) == token_admin, "Only admin can deactivate properties");
     assert(property_statuses.member(disclose(property_id)), "Property not registered");
-    
+
     const current_status = property_statuses.lookup(disclose(property_id));
     assert(current_status != PropertyStatus.Deactivated, "Property already deactivated");
-    
+
     property_statuses.insert(disclose(property_id), PropertyStatus.Deactivated);
-    
+
     const history_count = property_history.lookup(disclose(property_id));
     property_history.insert(disclose(property_id), (history_count + 1) as Uint<64>);
-    
+
     nonce.increment(1);
 }
 
 // Get property status
 export circuit getPropertyStatus(property_id: Bytes<32>): PropertyStatus {
     assert(property_statuses.member(disclose(property_id)), "Property not found");
-    
+
     return property_statuses.lookup(disclose(property_id));
 }
 
 // Get property owner
-export circuit getPropertyOwner(property_id: Bytes<32>): Uint<32> {
+export circuit getPropertyOwner(property_id: Bytes<32>): Bytes<32> {
     assert(property_statuses.member(disclose(property_id)), "Property not found");
-    
+
     return property_owners.lookup(disclose(property_id));
 }

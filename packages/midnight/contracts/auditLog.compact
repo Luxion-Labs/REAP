@@ -1,6 +1,6 @@
 // audit_log.compact -> Records all system events and transactions for audit trail, Provides immutable event logging for compliance and transparency, Enables comprehensive system activity tracking and analysis
 
-pragma language_version >= 0.16 && <= 0.18;
+pragma language_version >= 0.22.0;
 
 import CompactStandardLibrary;
 
@@ -22,7 +22,7 @@ enum EventType {
 
 // LEDGER STATE - Audit Log Management
 export ledger audit_entries: Map<Bytes<32>, EventType>; // entry_id -> event_type
-export ledger entry_actors: Map<Bytes<32>, Uint<32>>; // entry_id -> actor_address
+export ledger entry_actors: Map<Bytes<32>, Bytes<32>>; // entry_id -> actor_address
 export ledger entry_targets: Map<Bytes<32>, Bytes<32>>; // entry_id -> target_id
 export ledger entry_details: Map<Bytes<32>, Bytes<128>>; // entry_id -> event_details_hash
 export ledger entry_timestamps: Map<Bytes<32>, Uint<64>>; // entry_id -> timestamp
@@ -30,19 +30,19 @@ export ledger entry_statuses: Map<Bytes<32>, Boolean>; // entry_id -> success/fa
 
 // Audit configuration
 export ledger audit_initialized: Boolean;
-export ledger admin_address: Uint<32>;
+export ledger admin_address: Bytes<32>;
 export ledger audit_paused: Boolean;
 export ledger total_entries: Uint<64>;
 
 // Audit trail tracking
 export ledger entry_counter: Counter;
 export ledger entries_by_type: Map<EventType, Uint<64>>; // event_type -> count
-export ledger entries_by_actor: Map<Uint<32>, Uint<64>>; // actor -> count
+export ledger entries_by_actor: Map<Bytes<32>, Uint<64>>; // actor -> count
 
 // CONSTRUCTOR
 constructor() {
     audit_initialized = false;
-    admin_address = 0 as Uint<32>;
+    admin_address = pad(32, "");
     audit_paused = false;
     total_entries = 0 as Uint<64>;
 }
@@ -50,9 +50,9 @@ constructor() {
 // INITIALIZATION CIRCUIT
 
 // Initialize audit logging system
-export circuit initializeAudit(admin: Uint<32>): [] {
+export circuit initializeAudit(admin: Bytes<32>): [] {
     assert(!audit_initialized, "Audit logging already initialized");
-    assert(admin != 0 as Uint<32>, "Invalid admin address");
+    assert(disclose(admin) != pad(32, ""), "Invalid admin address");
 
     audit_initialized = true;
     admin_address = disclose(admin);
@@ -66,13 +66,13 @@ export circuit logPropertyEvent(
     entry_id: Bytes<32>,
     event_type: EventType,
     property_id: Bytes<32>,
-    actor: Uint<32>,
+    actor: Bytes<32>,
     timestamp_seconds: Uint<64>
 ): [] {
     assert(audit_initialized, "Audit logging not initialized");
     assert(!audit_paused, "Audit logging is paused");
     assert(!audit_entries.member(disclose(entry_id)), "Entry already exists");
-    assert(disclose(actor) != 0 as Uint<32>, "Invalid actor address");
+    assert(disclose(actor) != pad(32, ""), "Invalid actor address");
     assert(disclose(timestamp_seconds) > 0 as Uint<64>, "Invalid timestamp");
 
     audit_entries.insert(disclose(entry_id), disclose(event_type));
@@ -102,15 +102,15 @@ export circuit logTransactionEvent(
     entry_id: Bytes<32>,
     event_type: EventType,
     transaction_id: Bytes<32>,
-    actor: Uint<32>,
-    counterparty: Uint<32>,
+    actor: Bytes<32>,
+    counterparty: Bytes<32>,
     amount: Uint<64>,
     timestamp_seconds: Uint<64>
 ): [] {
     assert(audit_initialized, "Audit logging not initialized");
     assert(!audit_paused, "Audit logging is paused");
     assert(!audit_entries.member(disclose(entry_id)), "Entry already exists");
-    assert(disclose(actor) != 0 as Uint<32>, "Invalid actor address");
+    assert(disclose(actor) != pad(32, ""), "Invalid actor address");
     assert(disclose(timestamp_seconds) > 0 as Uint<64>, "Invalid timestamp");
 
     audit_entries.insert(disclose(entry_id), disclose(event_type));
@@ -139,7 +139,7 @@ export circuit logTransactionEvent(
 export circuit logAdminAction(
     entry_id: Bytes<32>,
     action_type: EventType,
-    admin: Uint<32>,
+    admin: Bytes<32>,
     target_resource: Bytes<32>,
     details_hash: Bytes<128>,
     timestamp_seconds: Uint<64>
@@ -170,7 +170,7 @@ export circuit logAdminAction(
 // Records failed transactions or actions
 export circuit markEntryFailed(
     entry_id: Bytes<32>,
-    caller: Uint<32>
+    caller: Bytes<32>
 ): [] {
     assert(audit_initialized, "Audit logging not initialized");
     assert(disclose(caller) == admin_address, "Only admin can mark entries");
@@ -183,7 +183,7 @@ export circuit markEntryFailed(
 
 // Get audit entry
 // Retrieves complete audit log entry
-export circuit getAuditEntry(entry_id: Bytes<32>): [EventType, Uint<32>, Bytes<32>, Uint<64>, Boolean] {
+export circuit getAuditEntry(entry_id: Bytes<32>): [EventType, Bytes<32>, Bytes<32>, Uint<64>, Boolean] {
     assert(audit_initialized, "Audit logging not initialized");
     assert(audit_entries.member(disclose(entry_id)), "Entry not found");
 
@@ -208,7 +208,7 @@ export circuit getEventTypeCount(event_type: EventType): Uint<64> {
 }
 
 // Get actor activity count
-export circuit getActorEventCount(actor: Uint<32>): Uint<64> {
+export circuit getActorEventCount(actor: Bytes<32>): Uint<64> {
     assert(audit_initialized, "Audit logging not initialized");
 
     if (entries_by_actor.member(disclose(actor))) {
@@ -227,7 +227,7 @@ export circuit getTotalEntries(): Uint<64> {
 // ADMIN MANAGEMENT CIRCUITS
 
 // Pause audit logging (emergency only)
-export circuit pauseAudit(caller: Uint<32>): [] {
+export circuit pauseAudit(caller: Bytes<32>): [] {
     assert(audit_initialized, "Audit logging not initialized");
     assert(disclose(caller) == admin_address, "Only admin can pause");
     assert(!audit_paused, "Already paused");
@@ -236,7 +236,7 @@ export circuit pauseAudit(caller: Uint<32>): [] {
 }
 
 // Unpause audit logging
-export circuit unpauseAudit(caller: Uint<32>): [] {
+export circuit unpauseAudit(caller: Bytes<32>): [] {
     assert(audit_initialized, "Audit logging not initialized");
     assert(disclose(caller) == admin_address, "Only admin can unpause");
     assert(audit_paused, "Not paused");
