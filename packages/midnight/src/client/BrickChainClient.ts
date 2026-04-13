@@ -1,6 +1,6 @@
 // Main client for BrickChain - integrates all APIs
 
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
 import { PropertyRegistryAPI } from "../api/PropertyRegistryAPI.js";
 import { MarketplaceAPI } from "../api/MarketplaceAPI.js";
 import { EscrowAPI } from "../api/EscrowAPI.js";
@@ -12,7 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 export class BrickChainClient {
-  private wallet: Wallet;
+  private wallet: any;
   private addresses: ContractAddresses;
 
   public propertyRegistry: PropertyRegistryAPI;
@@ -21,7 +21,7 @@ export class BrickChainClient {
   public verification: VerificationAPI;
   public fractionalToken: FractionalTokenAPI;
 
-  private constructor(wallet: Wallet, addresses: ContractAddresses) {
+  private constructor(wallet: any, addresses: ContractAddresses) {
     this.wallet = wallet;
     this.addresses = addresses;
 
@@ -60,7 +60,7 @@ export class BrickChainClient {
     ]);
   }
 
-  getWallet(): Wallet {
+  getWallet(): any {
     return this.wallet;
   }
 
