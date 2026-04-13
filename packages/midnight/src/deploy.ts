@@ -2,30 +2,20 @@ import { WalletBuilder } from "@midnight-ntwrk/wallet";
 import { deployContract } from "@midnight-ntwrk/midnight-js-contracts";
 import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
-import { NodeZkConfigProvider } from "@midnight-ntwrk/midnight-js-node-zk-config-provider";
 import { levelPrivateStateProvider } from "@midnight-ntwrk/midnight-js-level-private-state-provider";
-import {
-  NetworkId,
-  setNetworkId,
-  getZswapNetworkId,
-  getLedgerNetworkId,
-} from "@midnight-ntwrk/midnight-js-network-id";
-import { createBalancedTx } from "@midnight-ntwrk/midnight-js-types";
 import { nativeToken, Transaction } from "@midnight-ntwrk/ledger";
-import { Transaction as ZswapTransaction } from "@midnight-ntwrk/zswap";
+import { Transaction as ZswapTransaction, NetworkId } from "@midnight-ntwrk/zswap";
+import { sampleSigningKey } from "@midnight-ntwrk/compact-runtime";
 import { WebSocket } from "ws";
 import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline/promises";
 import * as Rx from "rxjs";
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+import { LocalZkConfigProvider } from "./utils/providers.js";
 
 // Fix WebSocket for Node.js environment
 // @ts-ignore
 globalThis.WebSocket = WebSocket;
-
-// Configure for Midnight Testnet
-setNetworkId(NetworkId.TestNet);
 
 // Testnet connection endpoints
 const TESTNET_CONFIG = {
@@ -88,7 +78,7 @@ async function main() {
       TESTNET_CONFIG.proofServer,
       TESTNET_CONFIG.node,
       walletSeed,
-      getZswapNetworkId(),
+      NetworkId.Undeployed,
       "info"
     );
 
@@ -115,7 +105,7 @@ async function main() {
     const contractPath = path.join(process.cwd(), "contracts");
     
     const contractConfigs = [
-      { name: "main", path: "managed/main/contract/index.cjs", stateId: "brickchainMainState" },
+      { name: "main", path: "managed/main/contract/index.cjs", stateId: "reapMainState" },
       { name: "property_registry", path: "managed/property_registry/contract/index.cjs", stateId: "propertyRegistryState" },
       { name: "fractional_token", path: "managed/fractional_token/contract/index.cjs", stateId: "fractionalTokenState" },
       { name: "marketplace", path: "managed/marketplace/contract/index.cjs", stateId: "marketplaceState" },
@@ -134,31 +124,20 @@ async function main() {
 
     console.log("All contract files validated. Starting deployment...");
 
-    // Create wallet provider for transactions
+    // Create wallet provider for transactions (v4 API)
     const walletState = await Rx.firstValueFrom(wallet.state());
 
+    // v4 API uses method calls for public keys
+    const coinPublicKey = (walletState as any).getCoinPublicKey?.() ?? (walletState as any).coinPublicKey;
+    const encryptionPublicKey = (walletState as any).getEncryptionPublicKey?.() ?? (walletState as any).encryptionPublicKey;
+
     const walletProvider = {
-      coinPublicKey: walletState.coinPublicKey,
-      encryptionPublicKey: walletState.encryptionPublicKey,
-      balanceTx(tx: any, newCoins: any) {
-        return wallet
-          .balanceTransaction(
-            ZswapTransaction.deserialize(
-              tx.serialize(getLedgerNetworkId()),
-              getZswapNetworkId()
-            ),
-            newCoins
-          )
-          .then((tx) => wallet.proveTransaction(tx))
-          .then((zswapTx) =>
-            Transaction.deserialize(
-              zswapTx.serialize(getZswapNetworkId()),
-              getLedgerNetworkId()
-            )
-          )
-          .then(createBalancedTx);
+      coinPublicKey,
+      encryptionPublicKey,
+      async balanceTx(tx: any, newCoins: any) {
+        return wallet.balanceTransaction(tx, newCoins);
       },
-      submitTx(tx: any) {
+      async submitTx(tx: any) {
         return wallet.submitTransaction(tx);
       }
     };
@@ -181,29 +160,35 @@ async function main() {
       
       // Load contract module
       const ContractModule = await import(contractModulePath);
-      const contractInstance = new ContractModule.Contract({});
+      
+      // v4 API: use exported compiledContract, not new instance
+      const compiledContract = ContractModule.contract;
+      const signingKey = sampleSigningKey();
       
       // Configure providers for this contract
       const providers = {
         privateStateProvider: levelPrivateStateProvider({
-          privateStateStoreName: `${config.name}-state`
+          privateStateStoreName: `${config.name}-state`,
+          accountId: "default",
+          privateStoragePasswordProvider: async () => "default-password",
         }),
         publicDataProvider: indexerPublicDataProvider(
           TESTNET_CONFIG.indexer,
           TESTNET_CONFIG.indexerWS
         ),
-        zkConfigProvider: new NodeZkConfigProvider(zkConfigPath),
-        proofProvider: httpClientProofProvider(TESTNET_CONFIG.proofServer),
+        zkConfigProvider: new LocalZkConfigProvider(zkConfigPath),
+        proofProvider: httpClientProofProvider(TESTNET_CONFIG.proofServer, new LocalZkConfigProvider(zkConfigPath)),
         walletProvider: walletProvider,
         midnightProvider: walletProvider
       };
       
-      // Deploy contract to blockchain
-      const deployed = await deployContract(providers, {
-        contract: contractInstance,
+      // v4 API: use compiledContract + signingKey, not contract + new instance
+      const deployed = await deployContract(providers as any, {
+        compiledContract,
+        signingKey,
         privateStateId: config.stateId,
         initialPrivateState: {}
-      });
+      } as any);
       
       const contractAddress = deployed.deployTxData.public.contractAddress;
       deployedAddresses[config.name] = contractAddress;
