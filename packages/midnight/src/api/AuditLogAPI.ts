@@ -41,8 +41,7 @@ export class AuditLogAPI {
   }
 
   async initializeAudit(adminAddress: string) {
-    const circuit = this.contract.initializeAudit;
-    return await circuit(adminAddress);
+    return await this.contract.initializeAudit(this.addressToBytes32(adminAddress));
   }
 
   async logPropertyEvent(
@@ -52,8 +51,13 @@ export class AuditLogAPI {
     actorAddress: string,
     timestamp: bigint
   ) {
-    const circuit = this.contract.logPropertyEvent;
-    return await circuit(entryId, eventType, propertyId, actorAddress, timestamp);
+    return await this.contract.logPropertyEvent(
+      this.stringToBytes32(entryId),
+      eventType,
+      this.stringToBytes32(propertyId),
+      this.addressToBytes32(actorAddress),
+      timestamp
+    );
   }
 
   async logTransactionEvent(
@@ -65,13 +69,12 @@ export class AuditLogAPI {
     amount: bigint,
     timestamp: bigint
   ) {
-    const circuit = this.contract.logTransactionEvent;
-    return await circuit(
-      entryId,
+    return await this.contract.logTransactionEvent(
+      this.stringToBytes32(entryId),
       eventType,
-      transactionId,
-      actorAddress,
-      counterpartyAddress,
+      this.stringToBytes32(transactionId),
+      this.addressToBytes32(actorAddress),
+      this.addressToBytes32(counterpartyAddress),
       amount,
       timestamp
     );
@@ -85,27 +88,54 @@ export class AuditLogAPI {
     detailsHash: string,
     timestamp: bigint
   ) {
-    const circuit = this.contract.logAdminAction;
-    return await circuit(entryId, actionType, adminAddress, targetResource, detailsHash, timestamp);
+    return await this.contract.logAdminAction(
+      this.stringToBytes32(entryId),
+      actionType,
+      this.addressToBytes32(adminAddress),
+      this.stringToBytes32(targetResource),
+      this.stringToBytes128(detailsHash),
+      timestamp
+    );
   }
 
   async getAuditEntry(entryId: string) {
-    const circuit = this.contract.getAuditEntry;
-    return await circuit(entryId);
+    return await this.contract.getAuditEntry(this.stringToBytes32(entryId));
   }
 
   async getEventTypeCount(eventType: EventType) {
-    const circuit = this.contract.getEventTypeCount;
-    return await circuit(eventType);
+    return await this.contract.getEventTypeCount(eventType);
   }
 
   async getActorEventCount(actorAddress: string) {
-    const circuit = this.contract.getActorEventCount;
-    return await circuit(actorAddress);
+    return await this.contract.getActorEventCount(this.addressToBytes32(actorAddress));
   }
 
   async getTotalEntries() {
-    const circuit = this.contract.getTotalEntries;
-    return await circuit();
+    return await this.contract.getTotalEntries();
+  }
+
+  // Helper methods
+  private stringToBytes32(str: string): Uint8Array {
+    const bytes = new Uint8Array(32);
+    const encoded = new TextEncoder().encode(str);
+    bytes.set(encoded.slice(0, 32));
+    return bytes;
+  }
+
+  private stringToBytes128(str: string): Uint8Array {
+    const bytes = new Uint8Array(128);
+    const encoded = new TextEncoder().encode(str);
+    bytes.set(encoded.slice(0, 128));
+    return bytes;
+  }
+
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 }

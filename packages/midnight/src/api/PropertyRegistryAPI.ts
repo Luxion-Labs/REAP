@@ -35,17 +35,12 @@ export class PropertyRegistryAPI {
   ): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const ownerAddress = this.addressToUint32(owner);
-    const locationBytes = this.stringToBytes64(locationHash);
-    const documentBytes = this.stringToBytes64(documentHash);
-
     await this.contract.registerProperty(
-      propertyIdBytes,
-      ownerAddress,
+      this.stringToBytes32(propertyId),
+      this.addressToBytes32(owner),
       valuation,
-      locationBytes,
-      documentBytes
+      this.stringToBytes64(locationHash),
+      this.stringToBytes64(documentHash)
     );
   }
 
@@ -58,7 +53,7 @@ export class PropertyRegistryAPI {
 
     return {
       propertyId,
-      owner: this.uint32ToAddress(owner),
+      owner: this.bytes32ToAddress(owner),
       status: status as PropertyStatus,
       valuation: value,
       locationHash: this.bytes64ToString(location),
@@ -73,36 +68,33 @@ export class PropertyRegistryAPI {
   ): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.updatePropertyStatus(propertyIdBytes, newStatus, callerAddress);
+    await this.contract.updatePropertyStatus(
+      this.stringToBytes32(propertyId),
+      newStatus,
+      this.addressToBytes32(caller)
+    );
   }
 
-  async transferProperty(
-    propertyId: string,
-    newOwner: string,
-    caller: string
-  ): Promise<void> {
+  async transferProperty(propertyId: string, newOwner: string, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const newOwnerAddress = this.addressToUint32(newOwner);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.transferProperty(propertyIdBytes, newOwnerAddress, callerAddress);
+    await this.contract.transferProperty(
+      this.stringToBytes32(propertyId),
+      this.addressToBytes32(newOwner),
+      this.addressToBytes32(caller)
+    );
   }
 
   async verifyProperty(propertyId: string, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.verifyProperty(propertyIdBytes, callerAddress);
+    await this.contract.verifyProperty(
+      this.stringToBytes32(propertyId),
+      this.addressToBytes32(caller)
+    );
   }
 
-  // Helper methods for type conversion
+  // Helper methods
   private stringToBytes32(str: string): Uint8Array {
     const bytes = new Uint8Array(32);
     const encoded = new TextEncoder().encode(str);
@@ -121,12 +113,17 @@ export class PropertyRegistryAPI {
     return new TextDecoder().decode(bytes).replace(/\0/g, "");
   }
 
-  private addressToUint32(address: string): number {
-    // Convert address string to uint32 (simplified)
-    return parseInt(address.slice(0, 8), 16);
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 
-  private uint32ToAddress(value: number): string {
-    return "0x" + value.toString(16).padStart(8, "0");
+  private bytes32ToAddress(bytes: Uint8Array): string {
+    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 }

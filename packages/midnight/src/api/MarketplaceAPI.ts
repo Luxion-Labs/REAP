@@ -35,18 +35,15 @@ export class MarketplaceAPI {
   ): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const listingIdBytes = this.stringToBytes32(listingId);
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const sellerAddress = this.addressToUint32(seller);
     const timestamp = BigInt(Math.floor(Date.now() / 1000));
 
     await this.contract.createListing(
-      listingIdBytes,
-      propertyIdBytes,
+      this.stringToBytes32(listingId),
+      this.stringToBytes32(propertyId),
       price,
       durationSeconds,
       timestamp,
-      sellerAddress
+      this.addressToBytes32(seller)
     );
   }
 
@@ -60,7 +57,7 @@ export class MarketplaceAPI {
     return {
       listingId,
       propertyId: this.bytes32ToString(propertyId),
-      seller: this.uint32ToAddress(seller),
+      seller: this.bytes32ToAddress(seller),
       price,
       status: status as ListingStatus,
       timestamp,
@@ -68,42 +65,39 @@ export class MarketplaceAPI {
     };
   }
 
-  async updateListing(
-    listingId: string,
-    newPrice: bigint,
-    caller: string
-  ): Promise<void> {
+  async updateListing(listingId: string, newPrice: bigint, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const listingIdBytes = this.stringToBytes32(listingId);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.updateListing(listingIdBytes, newPrice, callerAddress);
+    await this.contract.updateListing(
+      this.stringToBytes32(listingId),
+      newPrice,
+      this.addressToBytes32(caller)
+    );
   }
 
   async cancelListing(listingId: string, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const listingIdBytes = this.stringToBytes32(listingId);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.cancelListing(listingIdBytes, callerAddress);
+    await this.contract.cancelListing(
+      this.stringToBytes32(listingId),
+      this.addressToBytes32(caller)
+    );
   }
 
-  async purchaseListing(listingId: string, buyer: string): Promise<void> {
+  /**
+   * Purchase a listing.
+   * @param feeAmount - computed off-chain as: price * marketplaceFee / 10000
+   */
+  async purchaseListing(listingId: string, buyer: string, feeAmount: bigint): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const listingIdBytes = this.stringToBytes32(listingId);
-    const buyerAddress = this.addressToUint32(buyer);
-
-    await this.contract.purchaseListing(listingIdBytes, buyerAddress);
+    await this.contract.purchaseListing(
+      this.stringToBytes32(listingId),
+      this.addressToBytes32(buyer),
+      feeAmount
+    );
   }
 
   async getCollectedFees(caller: string): Promise<bigint> {
     if (!this.contract) await this.initialize();
-
-    const callerAddress = this.addressToUint32(caller);
-    return await this.contract.getCollectedFees(callerAddress);
+    return await this.contract.getCollectedFees(this.addressToBytes32(caller));
   }
 
   // Helper methods
@@ -118,11 +112,22 @@ export class MarketplaceAPI {
     return new TextDecoder().decode(bytes).replace(/\0/g, "");
   }
 
-  private addressToUint32(address: string): number {
-    return parseInt(address.slice(0, 8), 16);
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 
-  private uint32ToAddress(value: number): string {
-    return "0x" + value.toString(16).padStart(8, "0");
+  private bytes32ToAddress(bytes: Uint8Array): string {
+    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  /** Compute fee off-chain: price * basisPoints / 10000 */
+  static computeFee(price: bigint, basisPoints: bigint): bigint {
+    return (price * basisPoints) / 10000n;
   }
 }

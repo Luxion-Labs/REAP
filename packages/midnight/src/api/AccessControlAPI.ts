@@ -36,47 +36,82 @@ export class AccessControlAPI {
   }
 
   async initializeAccessControl(adminAddress: string) {
-    const circuit = this.contract.initializeAccessControl;
-    return await circuit(adminAddress);
+    return await this.contract.initializeAccessControl(this.addressToBytes32(adminAddress));
   }
 
+  /**
+   * Grant permission to a user for a resource.
+   * grantId should be derived as hash(user || resourceId) for consistent lookup.
+   */
   async grantPermission(
     grantId: string,
     userAddress: string,
     resourceId: string,
     callerAddress: string
   ) {
-    const circuit = this.contract.grantPermission;
-    return await circuit(grantId, userAddress, resourceId, callerAddress);
+    return await this.contract.grantPermission(
+      this.stringToBytes32(grantId),
+      this.addressToBytes32(userAddress),
+      this.stringToBytes32(resourceId),
+      this.addressToBytes32(callerAddress)
+    );
   }
 
   async revokePermission(grantId: string, userAddress: string, callerAddress: string) {
-    const circuit = this.contract.revokePermission;
-    return await circuit(grantId, userAddress, callerAddress);
+    return await this.contract.revokePermission(
+      this.stringToBytes32(grantId),
+      this.addressToBytes32(userAddress),
+      this.addressToBytes32(callerAddress)
+    );
   }
 
-  async hasReadPermission(userAddress: string, resourceId: string) {
-    const circuit = this.contract.hasReadPermission;
-    return await circuit(userAddress, resourceId);
+  /**
+   * Check read permission. grantId must match the one used in grantPermission.
+   */
+  async hasReadPermission(grantId: string, userAddress: string) {
+    return await this.contract.hasReadPermission(
+      this.stringToBytes32(grantId),
+      this.addressToBytes32(userAddress)
+    );
   }
 
-  async hasWritePermission(userAddress: string, resourceId: string) {
-    const circuit = this.contract.hasWritePermission;
-    return await circuit(userAddress, resourceId);
+  async hasWritePermission(grantId: string, userAddress: string) {
+    return await this.contract.hasWritePermission(
+      this.stringToBytes32(grantId),
+      this.addressToBytes32(userAddress)
+    );
   }
 
-  async hasExecutePermission(userAddress: string, resourceId: string) {
-    const circuit = this.contract.hasExecutePermission;
-    return await circuit(userAddress, resourceId);
+  async hasExecutePermission(grantId: string, userAddress: string) {
+    return await this.contract.hasExecutePermission(
+      this.stringToBytes32(grantId),
+      this.addressToBytes32(userAddress)
+    );
   }
 
   async pauseAccessControl(callerAddress: string) {
-    const circuit = this.contract.pauseAccessControl;
-    return await circuit(callerAddress);
+    return await this.contract.pauseAccessControl(this.addressToBytes32(callerAddress));
   }
 
   async unpauseAccessControl(callerAddress: string) {
-    const circuit = this.contract.unpauseAccessControl;
-    return await circuit(callerAddress);
+    return await this.contract.unpauseAccessControl(this.addressToBytes32(callerAddress));
+  }
+
+  // Helper methods
+  private stringToBytes32(str: string): Uint8Array {
+    const bytes = new Uint8Array(32);
+    const encoded = new TextEncoder().encode(str);
+    bytes.set(encoded.slice(0, 32));
+    return bytes;
+  }
+
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 }

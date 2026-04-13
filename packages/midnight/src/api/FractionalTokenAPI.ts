@@ -26,41 +26,44 @@ export class FractionalTokenAPI {
     );
   }
 
-  async mint(to: string, amount: bigint): Promise<void> {
+  async initializeToken(admin: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const toAddress = this.addressToUint32(to);
-    await this.contract.mint(toAddress, amount);
+    await this.contract.initializeToken(this.addressToBytes32(admin));
   }
 
-  async burn(from: string, amount: bigint): Promise<void> {
+  async mint(to: string, amount: bigint, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const fromAddress = this.addressToUint32(from);
-    await this.contract.burn(fromAddress, amount);
+    await this.contract.mint(this.addressToBytes32(to), amount, this.addressToBytes32(caller));
   }
 
-  async transfer(from: string, to: string, amount: bigint): Promise<void> {
+  async burn(from: string, amount: bigint, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const fromAddress = this.addressToUint32(from);
-    const toAddress = this.addressToUint32(to);
-    await this.contract.transfer(fromAddress, toAddress, amount);
+    await this.contract.burn(this.addressToBytes32(from), amount, this.addressToBytes32(caller));
   }
 
-  async approve(owner: string, spender: string, amount: bigint): Promise<void> {
+  async transfer(from: string, to: string, amount: bigint, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
+    await this.contract.transfer(
+      this.addressToBytes32(from),
+      this.addressToBytes32(to),
+      amount,
+      this.addressToBytes32(caller)
+    );
+  }
 
-    const ownerAddress = this.addressToUint32(owner);
-    const spenderAddress = this.addressToUint32(spender);
-    await this.contract.approve(ownerAddress, spenderAddress, amount);
+  async approve(owner: string, spender: string, amount: bigint, caller: string): Promise<void> {
+    if (!this.contract) await this.initialize();
+    await this.contract.approve(
+      this.addressToBytes32(owner),
+      this.addressToBytes32(spender),
+      amount,
+      this.addressToBytes32(caller)
+    );
   }
 
   async balanceOf(holder: string): Promise<bigint> {
     if (!this.contract) await this.initialize();
-
-    const holderAddress = this.addressToUint32(holder);
-    return await this.contract.balanceOf(holderAddress);
+    return await this.contract.balanceOf(this.addressToBytes32(holder));
   }
 
   async getTotalSupply(): Promise<bigint> {
@@ -78,34 +81,43 @@ export class FractionalTokenAPI {
     return await this.contract.getTokenState();
   }
 
-  async registerProperty(propertyId: string, ownerId: string): Promise<void> {
+  async pauseToken(caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const ownerAddress = this.addressToUint32(ownerId);
-    await this.contract.register_property(propertyIdBytes, ownerAddress);
+    await this.contract.pause_token(this.addressToBytes32(caller));
   }
 
-  async tokenizeProperty(propertyId: string, tokenId: number): Promise<void> {
+  async unpauseToken(caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
+    await this.contract.unpause_token(this.addressToBytes32(caller));
+  }
 
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    await this.contract.tokenize_property(propertyIdBytes, tokenId);
+  async registerProperty(propertyId: string, ownerId: string, caller: string): Promise<void> {
+    if (!this.contract) await this.initialize();
+    await this.contract.register_property(
+      this.stringToBytes32(propertyId),
+      this.addressToBytes32(ownerId),
+      this.addressToBytes32(caller)
+    );
+  }
+
+  async tokenizeProperty(propertyId: string, tokenId: string, caller: string): Promise<void> {
+    if (!this.contract) await this.initialize();
+    await this.contract.tokenize_property(
+      this.stringToBytes32(propertyId),
+      this.stringToBytes32(tokenId),
+      this.addressToBytes32(caller)
+    );
   }
 
   async getPropertyStatus(propertyId: string): Promise<number> {
     if (!this.contract) await this.initialize();
-
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    return await this.contract.getPropertyStatus(propertyIdBytes);
+    return await this.contract.getPropertyStatus(this.stringToBytes32(propertyId));
   }
 
   async getPropertyOwner(propertyId: string): Promise<string> {
     if (!this.contract) await this.initialize();
-
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const owner = await this.contract.getPropertyOwner(propertyIdBytes);
-    return this.uint32ToAddress(owner);
+    const owner = await this.contract.getPropertyOwner(this.stringToBytes32(propertyId));
+    return this.bytes32ToAddress(owner);
   }
 
   // Helper methods
@@ -116,11 +128,17 @@ export class FractionalTokenAPI {
     return bytes;
   }
 
-  private addressToUint32(address: string): number {
-    return parseInt(address.slice(0, 8), 16);
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 
-  private uint32ToAddress(value: number): string {
-    return "0x" + value.toString(16).padStart(8, "0");
+  private bytes32ToAddress(bytes: Uint8Array): string {
+    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 }

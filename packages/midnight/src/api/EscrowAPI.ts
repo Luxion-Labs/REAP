@@ -35,17 +35,13 @@ export class EscrowAPI {
   ): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const escrowIdBytes = this.stringToBytes32(escrowId);
-    const listingIdBytes = this.stringToBytes32(listingId);
-    const sellerAddress = this.addressToUint32(seller);
-    const buyerAddress = this.addressToUint32(buyer);
     const timestamp = BigInt(Math.floor(Date.now() / 1000));
 
     await this.contract.depositEscrow(
-      escrowIdBytes,
-      listingIdBytes,
-      sellerAddress,
-      buyerAddress,
+      this.stringToBytes32(escrowId),
+      this.stringToBytes32(listingId),
+      this.addressToBytes32(seller),
+      this.addressToBytes32(buyer),
       amount,
       timestamp
     );
@@ -60,9 +56,9 @@ export class EscrowAPI {
 
     return {
       escrowId,
-      listingId: "", // Would need to be stored separately
-      buyer: this.uint32ToAddress(buyer),
-      seller: this.uint32ToAddress(seller),
+      listingId: "",
+      buyer: this.bytes32ToAddress(buyer),
+      seller: this.bytes32ToAddress(seller),
       amount,
       status: status as EscrowStatus,
       createdAt,
@@ -73,38 +69,33 @@ export class EscrowAPI {
   async releaseEscrow(escrowId: string, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const escrowIdBytes = this.stringToBytes32(escrowId);
-    const callerAddress = this.addressToUint32(caller);
     const timestamp = BigInt(Math.floor(Date.now() / 1000));
 
-    await this.contract.releaseEscrow(escrowIdBytes, callerAddress, timestamp);
+    await this.contract.releaseEscrow(
+      this.stringToBytes32(escrowId),
+      this.addressToBytes32(caller),
+      timestamp
+    );
   }
 
-  async fileDispute(
-    escrowId: string,
-    disputeReason: string,
-    caller: string
-  ): Promise<void> {
+  async fileDispute(escrowId: string, disputeReason: string, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const escrowIdBytes = this.stringToBytes32(escrowId);
-    const disputeReasonBytes = this.stringToBytes128(disputeReason);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.fileDispute(escrowIdBytes, disputeReasonBytes, callerAddress);
+    await this.contract.fileDispute(
+      this.stringToBytes32(escrowId),
+      this.stringToBytes128(disputeReason),
+      this.addressToBytes32(caller)
+    );
   }
 
-  async resolveDispute(
-    escrowId: string,
-    releaseToSeller: boolean,
-    caller: string
-  ): Promise<void> {
+  async resolveDispute(escrowId: string, releaseToSeller: boolean, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const escrowIdBytes = this.stringToBytes32(escrowId);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.resolveDispute(escrowIdBytes, releaseToSeller, callerAddress);
+    await this.contract.resolveDispute(
+      this.stringToBytes32(escrowId),
+      releaseToSeller,
+      this.addressToBytes32(caller)
+    );
   }
 
   // Helper methods
@@ -122,11 +113,17 @@ export class EscrowAPI {
     return bytes;
   }
 
-  private addressToUint32(address: string): number {
-    return parseInt(address.slice(0, 8), 16);
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 
-  private uint32ToAddress(value: number): string {
-    return "0x" + value.toString(16).padStart(8, "0");
+  private bytes32ToAddress(bytes: Uint8Array): string {
+    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 }

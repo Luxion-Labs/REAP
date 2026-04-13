@@ -34,55 +34,48 @@ export class VerificationAPI {
   ): Promise<void> {
     if (!this.contract) await this.initialize();
 
-    const requestIdBytes = this.stringToBytes32(requestId);
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const documentHashBytes = this.stringToBytes64(documentHash);
-    const requesterAddress = this.addressToUint32(requester);
     const timestamp = BigInt(Math.floor(Date.now() / 1000));
 
     await this.contract.requestVerification(
-      requestIdBytes,
-      propertyIdBytes,
-      documentHashBytes,
+      this.stringToBytes32(requestId),
+      this.stringToBytes32(propertyId),
+      this.stringToBytes64(documentHash),
       timestamp,
-      requesterAddress
+      this.addressToBytes32(requester)
     );
   }
 
   async getVerificationStatus(requestId: string): Promise<VerificationRequest> {
     if (!this.contract) await this.initialize();
 
-    const requestIdBytes = this.stringToBytes32(requestId);
     const [status, requester, propertyId] = await this.contract.getVerificationStatus(
-      requestIdBytes
+      this.stringToBytes32(requestId)
     );
 
     return {
       requestId,
       propertyId: this.bytes32ToString(propertyId),
-      requester: this.uint32ToAddress(requester),
+      requester: this.bytes32ToAddress(requester),
       status: status as VerificationStatus,
-      documentHash: "", // Would need to be retrieved separately
-      timestamp: 0n, // Would need to be retrieved separately
+      documentHash: "",
+      timestamp: 0n,
     };
   }
 
   async approveVerifier(verifier: string, caller: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const verifierAddress = this.addressToUint32(verifier);
-    const callerAddress = this.addressToUint32(caller);
-
-    await this.contract.approveVerifier(verifierAddress, callerAddress);
+    await this.contract.approveVerifier(
+      this.addressToBytes32(verifier),
+      this.addressToBytes32(caller)
+    );
   }
 
   async startVerification(requestId: string, verifier: string): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const requestIdBytes = this.stringToBytes32(requestId);
-    const verifierAddress = this.addressToUint32(verifier);
-
-    await this.contract.startVerification(requestIdBytes, verifierAddress);
+    await this.contract.startVerification(
+      this.stringToBytes32(requestId),
+      this.addressToBytes32(verifier)
+    );
   }
 
   async submitVerificationResult(
@@ -92,31 +85,21 @@ export class VerificationAPI {
     verifier: string
   ): Promise<void> {
     if (!this.contract) await this.initialize();
-
-    const requestIdBytes = this.stringToBytes32(requestId);
-    const resultHashBytes = this.stringToBytes128(resultHash);
-    const verifierAddress = this.addressToUint32(verifier);
-
     await this.contract.submitVerificationResult(
-      requestIdBytes,
-      resultHashBytes,
+      this.stringToBytes32(requestId),
+      this.stringToBytes128(resultHash),
       approved,
-      verifierAddress
+      this.addressToBytes32(verifier)
     );
   }
 
-  async verifyProof(
-    requestId: string,
-    proofData: string,
-    caller: string
-  ): Promise<boolean> {
+  async verifyProof(requestId: string, proofData: string, caller: string): Promise<boolean> {
     if (!this.contract) await this.initialize();
-
-    const requestIdBytes = this.stringToBytes32(requestId);
-    const proofDataBytes = this.stringToBytes256(proofData);
-    const callerAddress = this.addressToUint32(caller);
-
-    return await this.contract.verifyProof(requestIdBytes, proofDataBytes, callerAddress);
+    return await this.contract.verifyProof(
+      this.stringToBytes32(requestId),
+      this.stringToBytes128(proofData),
+      this.addressToBytes32(caller)
+    );
   }
 
   // Helper methods
@@ -141,22 +124,21 @@ export class VerificationAPI {
     return bytes;
   }
 
-  private stringToBytes256(str: string): Uint8Array {
-    const bytes = new Uint8Array(256);
-    const encoded = new TextEncoder().encode(str);
-    bytes.set(encoded.slice(0, 256));
-    return bytes;
-  }
-
   private bytes32ToString(bytes: Uint8Array): string {
     return new TextDecoder().decode(bytes).replace(/\0/g, "");
   }
 
-  private addressToUint32(address: string): number {
-    return parseInt(address.slice(0, 8), 16);
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 
-  private uint32ToAddress(value: number): string {
-    return "0x" + value.toString(16).padStart(8, "0");
+  private bytes32ToAddress(bytes: Uint8Array): string {
+    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 }

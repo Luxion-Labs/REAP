@@ -21,80 +21,72 @@ export class MainAPI {
     return this;
   }
 
-  // Initialize system
   async initializeSystem(adminAddress: string) {
-    const circuit = this.contract.initializeSystem;
-    const result = await circuit(adminAddress);
-    return result;
+    return await this.contract.initializeSystem(this.addressToBytes32(adminAddress));
   }
 
-  // Emergency controls
   async emergencyPause(callerAddress: string) {
-    const circuit = this.contract.emergencyPause;
-    return await circuit(callerAddress);
+    return await this.contract.emergencyPause(this.addressToBytes32(callerAddress));
   }
 
   async emergencyUnpause(callerAddress: string) {
-    const circuit = this.contract.emergencyUnpause;
-    return await circuit(callerAddress);
+    return await this.contract.emergencyUnpause(this.addressToBytes32(callerAddress));
   }
 
-  // System status
   async getSystemStatus() {
-    const circuit = this.contract.getSystemStatus;
-    return await circuit();
+    return await this.contract.getSystemStatus();
   }
 
   async isSystemOperational() {
-    const circuit = this.contract.isSystemOperational;
-    return await circuit();
+    return await this.contract.isSystemOperational();
   }
 
-  // Metrics
   async getTotalUsers() {
-    const circuit = this.contract.getTotalUsers;
-    return await circuit();
+    return await this.contract.getTotalUsers();
   }
 
   async getTotalProperties() {
-    const circuit = this.contract.getTotalProperties;
-    return await circuit();
+    return await this.contract.getTotalProperties();
   }
 
   async getTotalTransactions() {
-    const circuit = this.contract.getTotalTransactions;
-    return await circuit();
+    return await this.contract.getTotalTransactions();
   }
 
   async incrementUserCount(callerAddress: string) {
-    const circuit = this.contract.incrementUserCount;
-    return await circuit(callerAddress);
+    return await this.contract.incrementUserCount(this.addressToBytes32(callerAddress));
   }
 
   async incrementPropertyCount(callerAddress: string) {
-    const circuit = this.contract.incrementPropertyCount;
-    return await circuit(callerAddress);
+    return await this.contract.incrementPropertyCount(this.addressToBytes32(callerAddress));
   }
 
   async incrementTransactionCount(callerAddress: string) {
-    const circuit = this.contract.incrementTransactionCount;
-    return await circuit(callerAddress);
+    return await this.contract.incrementTransactionCount(this.addressToBytes32(callerAddress));
   }
 
-  // Fees
   async getCollectedFees() {
-    const circuit = this.contract.getCollectedFees;
-    return await circuit();
+    return await this.contract.getCollectedFees();
   }
 
   async withdrawCollectedFees(callerAddress: string) {
-    const circuit = this.contract.withdrawCollectedFees;
-    return await circuit(callerAddress);
+    return await this.contract.withdrawCollectedFees(this.addressToBytes32(callerAddress));
   }
 
-  // Admin
   async transferAdmin(newAdminAddress: string, callerAddress: string) {
-    const circuit = this.contract.transferAdmin;
-    return await circuit(newAdminAddress, callerAddress);
+    return await this.contract.transferAdmin(
+      this.addressToBytes32(newAdminAddress),
+      this.addressToBytes32(callerAddress)
+    );
+  }
+
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 }

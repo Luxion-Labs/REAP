@@ -27,47 +27,55 @@ export class RoleAPI {
     return this;
   }
 
-  // Initialize roles
   async initializeRoles(adminAddress: string) {
-    const circuit = this.contract.initialize_roles;
-    return await circuit(adminAddress);
+    return await this.contract.initialize_roles(this.addressToBytes32(adminAddress));
   }
 
-  // Role management
   async setRole(userAddress: string, role: Role, callerAddress: string) {
-    const circuit = this.contract.set_role;
-    return await circuit(userAddress, role, callerAddress);
+    return await this.contract.set_role(
+      this.addressToBytes32(userAddress),
+      role,
+      this.addressToBytes32(callerAddress)
+    );
   }
 
   async getUserRole(userAddress: string) {
-    const circuit = this.contract.get_user_role;
-    return await circuit(userAddress);
+    return await this.contract.get_user_role(this.addressToBytes32(userAddress));
   }
 
   async removeRole(userAddress: string, callerAddress: string) {
-    const circuit = this.contract.remove_role;
-    return await circuit(userAddress, callerAddress);
+    return await this.contract.remove_role(
+      this.addressToBytes32(userAddress),
+      this.addressToBytes32(callerAddress)
+    );
   }
 
   async isUserAdmin(userAddress: string) {
-    const circuit = this.contract.is_user_admin;
-    return await circuit(userAddress);
+    return await this.contract.is_user_admin(this.addressToBytes32(userAddress));
   }
 
-  // Admin transfer
   async transferAdmin(newAdminAddress: string, callerAddress: string) {
-    const circuit = this.contract.transfer_admin;
-    return await circuit(newAdminAddress, callerAddress);
+    return await this.contract.transfer_admin(
+      this.addressToBytes32(newAdminAddress),
+      this.addressToBytes32(callerAddress)
+    );
   }
 
-  // Pause controls
   async pauseContract(callerAddress: string) {
-    const circuit = this.contract.pause_contract;
-    return await circuit(callerAddress);
+    return await this.contract.pause_contract(this.addressToBytes32(callerAddress));
   }
 
   async unpauseContract(callerAddress: string) {
-    const circuit = this.contract.unpause_contract;
-    return await circuit(callerAddress);
+    return await this.contract.unpause_contract(this.addressToBytes32(callerAddress));
+  }
+
+  private addressToBytes32(address: string): Uint8Array {
+    const hex = address.startsWith("0x") ? address.slice(2) : address;
+    const padded = hex.padStart(64, "0").slice(0, 64);
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }
 }
