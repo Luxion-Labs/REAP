@@ -12,6 +12,14 @@ import {
 import * as Rx from "rxjs";
 import * as fs from "fs";
 import * as path from "path";
+import { Transaction as ZswapTransaction, NetworkId as ZswapNetworkId } from "@midnight-ntwrk/zswap";
+
+const NETWORK_ID_MAP: Record<string, number> = {
+  'undeployed': ZswapNetworkId.Undeployed,
+  'preview': ZswapNetworkId.DevNet,
+  'testnet': ZswapNetworkId.TestNet,
+  'mainnet': ZswapNetworkId.MainNet,
+};
 
 /**
  * LocalZkConfigProvider - Replaces removed NodeZkConfigProvider from v4 SDK
@@ -23,7 +31,11 @@ export class LocalZkConfigProvider<K extends string> extends ZKConfigProvider<K>
   }
 
   async getZKIR(circuitId: K): Promise<ZKIR> {
-    const irPath = path.join(this.zkArtifactsDir, String(circuitId), "ir");
+    const irPath = path.join(this.zkArtifactsDir, "zkir", `${String(circuitId)}.zkir`);
+    console.log(`Loading ZKIR for ${String(circuitId)} from ${irPath}`);
+    if (!fs.existsSync(irPath)) {
+        throw new Error(`ZKIR file not found: ${irPath}`);
+    }
     const content = fs.readFileSync(irPath, "utf-8");
     return JSON.parse(content) as ZKIR;
   }
@@ -31,8 +43,8 @@ export class LocalZkConfigProvider<K extends string> extends ZKConfigProvider<K>
   async getProverKey(circuitId: K): Promise<ProverKey> {
     const keyPath = path.join(
       this.zkArtifactsDir,
-      String(circuitId),
-      "proving_key"
+      "keys",
+      `${String(circuitId)}.prover`
     );
     return fs.readFileSync(keyPath) as unknown as ProverKey;
   }
@@ -40,8 +52,8 @@ export class LocalZkConfigProvider<K extends string> extends ZKConfigProvider<K>
   async getVerifierKey(circuitId: K): Promise<VerifierKey> {
     const keyPath = path.join(
       this.zkArtifactsDir,
-      String(circuitId),
-      "verifying_key"
+      "keys",
+      `${String(circuitId)}.verifier`
     );
     return fs.readFileSync(keyPath) as unknown as VerifierKey;
   }
@@ -49,19 +61,60 @@ export class LocalZkConfigProvider<K extends string> extends ZKConfigProvider<K>
 
 export async function createWalletProvider(wallet: any) {
   // Get wallet state once to cache keys
-  const state = await Rx.firstValueFrom(wallet.state());
+  const state = await Rx.firstValueFrom(wallet.state()) as any;
 
   // v5 API: state properties are direct values
-  const coinPublicKey = state.coinPublicKey;
-  const encryptionPublicKey = state.encryptionPublicKey;
+  // We use the Legacy (hex) versions for compatibility with v4 SDK expectations
+  const coinPublicKey = state.coinPublicKeyLegacy;
+  const encryptionPublicKey = state.encryptionPublicKeyLegacy;
 
   return {
+    getCoinPublicKey: () => coinPublicKey,
+    getEncryptionPublicKey: () => encryptionPublicKey,
     coinPublicKey,
     encryptionPublicKey,
-    async balanceTx(tx: any, newCoins: any) {
-      // v5: wallet methods return promises directly
-      const balancedTx = await wallet.balanceTransaction(tx, newCoins);
-      return balancedTx;
+    async balanceTx(tx: any, ttl?: Date) {
+      console.log(">>> ENTERED balanceTx bridge");
+      console.log(">>> TX type:", tx?.constructor?.name);
+      
+      let processedTx = tx;
+      try {
+        if (tx && typeof tx.serialize === 'function') {
+           const networkName = process.env.MIDNIGHT_NETWORK || 'undeployed';
+           const zswapNetId = NETWORK_ID_MAP[networkName] ?? ZswapNetworkId.Undeployed;
+           console.log(`>>> Converting tx (Network: ${networkName}, ID: ${zswapNetId})...`);
+           const serialized = tx.serialize(zswapNetId);
+           processedTx = ZswapTransaction.deserialize(serialized, zswapNetId);
+           console.log(">>> Tx conversion successful.");
+        }
+      } catch (e: any) {
+        console.warn(">>> Tx conversion failed:", e.message);
+      }
+
+      console.log(">>> Calling wallet.balanceTransaction...");
+      let balancedResult;
+      try {
+          balancedResult = await wallet.balanceTransaction(processedTx, []);
+          console.log(">>> wallet.balanceTransaction returned:", balancedResult?.type);
+      } catch (e: any) {
+          console.error(">>> wallet.balanceTransaction CRASHED:", e.message);
+          throw e;
+      }
+      
+      if (balancedResult.type === 'NothingToProve') {
+        console.log(">>> Transaction already balanced, returning.");
+        return balancedResult.transaction;
+      } else {
+        console.log(">>> Calling wallet.proveTransaction...");
+        try {
+            const proven = await wallet.proveTransaction(balancedResult);
+            console.log(">>> wallet.proveTransaction successful.");
+            return proven;
+        } catch (e: any) {
+            console.error(">>> wallet.proveTransaction CRASHED:", e.message);
+            throw e;
+        }
+      }
     },
     async submitTx(tx: any) {
       return wallet.submitTransaction(tx);
@@ -73,25 +126,38 @@ export async function createContractProviders(
   wallet: any,
   zkConfigPath: string,
   privateStateStoreName: string,
-  accountId: string,
-  indexerUrl: string,
-  indexerWsUrl: string,
-  proofServerUrl: string
+  accountId?: string,
+  indexerUrl?: string,
+  indexerWsUrl?: string,
+  proofServerUrl?: string
 ) {
+  // Import config for defaults
+  const { TESTNET_CONFIG } = await import("../config/network.js");
+  
+  // If accountId not provided, extract from wallet
+  let finalAccountId: string = accountId || "";
+  if (!finalAccountId) {
+    const walletState = await Rx.firstValueFrom(wallet.state()) as any;
+    finalAccountId = walletState.address || "default-account";
+  }
+
   const walletProvider = await createWalletProvider(wallet);
 
   return {
     privateStateProvider: levelPrivateStateProvider({
       privateStateStoreName,
-      accountId,
+      accountId: finalAccountId,
       privateStoragePasswordProvider: async () => "default-password",
     }),
     publicDataProvider: indexerPublicDataProvider(
-      indexerUrl,
-      indexerWsUrl
+      indexerUrl || TESTNET_CONFIG.indexer,
+      indexerWsUrl || TESTNET_CONFIG.indexerWS
     ),
     zkConfigProvider: new LocalZkConfigProvider(zkConfigPath),
-    proofProvider: httpClientProofProvider(proofServerUrl, new LocalZkConfigProvider(zkConfigPath)),
+    proofProvider: httpClientProofProvider(
+      proofServerUrl || TESTNET_CONFIG.proofServer,
+      new LocalZkConfigProvider(zkConfigPath)
+    ),
     walletProvider,
     midnightProvider: walletProvider,
   };

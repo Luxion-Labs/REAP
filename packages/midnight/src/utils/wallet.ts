@@ -1,20 +1,20 @@
 // Wallet utilities for Midnight blockchain
 
 import { WalletBuilder } from "@midnight-ntwrk/wallet";
-import { type Wallet } from "@midnight-ntwrk/wallet-api";
+// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
 import { nativeToken } from "@midnight-ntwrk/ledger";
-import { getZswapNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
+import { getNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import * as Rx from "rxjs";
 import { TESTNET_CONFIG } from "../config/network.js";
 
-export async function buildWallet(seed: string): Promise<Wallet> {
+export async function buildWallet(seed: string): Promise<any> {
   const wallet = await WalletBuilder.buildFromSeed(
     TESTNET_CONFIG.indexer,
     TESTNET_CONFIG.indexerWS,
     TESTNET_CONFIG.proofServer,
     TESTNET_CONFIG.node,
     seed,
-    getZswapNetworkId(),
+    getNetworkId() as any,
     "info"
   );
 
@@ -27,30 +27,30 @@ export function generateWalletSeed(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function waitForFunds(wallet: Wallet): Promise<bigint> {
+export async function waitForFunds(wallet: any): Promise<bigint> {
   return Rx.firstValueFrom(
     wallet.state().pipe(
-      Rx.tap((state) => {
+      Rx.tap((state: any) => {
         if (state.syncProgress) {
           console.log(
             `Sync progress: synced=${state.syncProgress.synced}, sourceGap=${state.syncProgress.lag.sourceGap}, applyGap=${state.syncProgress.lag.applyGap}`
           );
         }
       }),
-      Rx.filter((state) => state.syncProgress?.synced === true),
-      Rx.map((s) => s.balances[nativeToken()] ?? 0n),
-      Rx.filter((balance) => balance > 0n),
+      Rx.filter((state: any) => state.syncProgress?.synced === true),
+      Rx.map((s: any) => s.balances[nativeToken()] ?? 0n),
+      Rx.filter((balance: any) => balance > 0n),
       Rx.tap((balance) => console.log(`Wallet funded with balance: ${balance}`))
     )
   );
 }
 
-export async function getWalletBalance(wallet: Wallet): Promise<bigint> {
-  const state = await Rx.firstValueFrom(wallet.state());
+export async function getWalletBalance(wallet: any): Promise<bigint> {
+  const state = await Rx.firstValueFrom(wallet.state()) as any;
   return state.balances[nativeToken()] ?? 0n;
 }
 
-export async function getWalletAddress(wallet: Wallet): Promise<string> {
-  const state = await Rx.firstValueFrom(wallet.state());
+export async function getWalletAddress(wallet: any): Promise<string> {
+  const state = await Rx.firstValueFrom(wallet.state()) as any;
   return state.address;
 }
