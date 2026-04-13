@@ -85,15 +85,15 @@ export const CONTRACT_NAMES = [
 export type ContractName = (typeof CONTRACT_NAMES)[number];
 
 export const CONTRACT_PATHS: Record<ContractName, string> = {
-  main: "build/main",
-  propertyRegistry: "build/property_registry",
-  marketplace: "build/marketplace",
-  escrow: "build/escrow",
-  verification: "build/verification",
-  role: "build/role",
-  accessControl: "build/accessControl",
-  auditLog: "build/auditLog",
-  fractionalToken: "build/fractional_token",
+  main: "build/REAP",
+  propertyRegistry: "build/REAP",
+  marketplace: "build/REAP",
+  escrow: "build/REAP",
+  verification: "build/REAP",
+  role: "build/REAP",
+  accessControl: "build/REAP",
+  auditLog: "build/REAP",
+  fractionalToken: "build/REAP",
 };
 
 /**

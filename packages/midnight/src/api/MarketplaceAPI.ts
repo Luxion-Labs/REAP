@@ -97,7 +97,7 @@ export class MarketplaceAPI {
 
   async getCollectedFees(caller: string): Promise<bigint> {
     if (!this.contract) await this.initialize();
-    return await this.contract.getCollectedFees(this.addressToBytes32(caller));
+    return await this.contract.getMarketplaceCollectedFees(this.addressToBytes32(caller));
   }
 
   // Helper methods
