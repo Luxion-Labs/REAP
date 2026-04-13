@@ -1,5 +1,8 @@
+name: reap
+
 services:
   api:
+    profiles: ["app-layer"]
     build:
       context: ../packages/api
       dockerfile: Dockerfile
@@ -11,11 +14,13 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
   redis:
+    profiles: ["app-layer"]
     image: redis:7-alpine
     ports:
       - "127.0.0.1:6379:6379"
 
   ipfs:
+    profiles: ["app-layer"]
     image: ipfs/kubo:latest
     ports:
       - "5001:5001"
@@ -28,11 +33,17 @@ services:
     container_name: 'reap-indexer'
     image: 'midnightntwrk/indexer-standalone:3.0.0'
     ports:
-      - '0:8088'
+      - '8088:8088'
     environment:
       RUST_LOG: "indexer=info,chain_indexer=info,indexer_api=info,wallet_indexer=info,indexer_common=info,fastrace_opentelemetry=off,info"
       APP__INFRA__SECRET: "303132333435363738393031323334353637383930313233343536373839303132"
       APP__INFRA__NODE__URL: "ws://node:9944"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/api/v1/graphql"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   node:
     image: 'midnightntwrk/midnight-node:0.20.0'
