@@ -49,16 +49,20 @@ export const ACTIVE_NETWORK = NETWORK_CONFIG[NETWORK_ID];
  *
  * Example: "mn_contract1qz9...abc"
  */
-export const CONTRACT_ADDRESSES: Record<string, string | null> = {
-  main: process.env.NEXT_PUBLIC_CONTRACT_MAIN ?? null,
-  propertyRegistry: process.env.NEXT_PUBLIC_CONTRACT_PROPERTY_REGISTRY ?? null,
-  fractionalToken: process.env.NEXT_PUBLIC_CONTRACT_FRACTIONAL_TOKEN ?? null,
-  marketplace: process.env.NEXT_PUBLIC_CONTRACT_MARKETPLACE ?? null,
-  verification: process.env.NEXT_PUBLIC_CONTRACT_VERIFICATION ?? null,
-  escrow: process.env.NEXT_PUBLIC_CONTRACT_ESCROW ?? null,
-  accessControl: process.env.NEXT_PUBLIC_CONTRACT_ACCESS_CONTROL ?? null,
-  auditLog: process.env.NEXT_PUBLIC_CONTRACT_AUDIT_LOG ?? null,
-  role: process.env.NEXT_PUBLIC_CONTRACT_ROLE ?? null,
+export const CONTRACT_ADDRESSES = {
+  // UNIFIED V3: Single address for all modules
+  unified: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  
+  // Legacy mappings (can point to unified during transition)
+  main: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  propertyRegistry: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  fractionalToken: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  marketplace: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  verification: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  escrow: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  accessControl: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  auditLog: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
+  role: process.env.NEXT_PUBLIC_CONTRACT_REAP ?? null,
 };
 
 /**
@@ -81,7 +85,7 @@ export function requireContractAddress(key: keyof typeof CONTRACT_ADDRESSES): st
  */
 export function areContractsDeployed(): boolean {
   const p0 = ['propertyRegistry', 'fractionalToken', 'main'];
-  return p0.every((k) => !!CONTRACT_ADDRESSES[k]);
+  return p0.every((k) => !!CONTRACT_ADDRESSES[k as keyof typeof CONTRACT_ADDRESSES]);
 }
 
 /**
