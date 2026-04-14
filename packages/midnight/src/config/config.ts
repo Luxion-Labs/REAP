@@ -5,7 +5,7 @@ export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
 
 export const contractConfig = {
   privateStateStoreName: 'reap-private-state',
-  zkConfigPath: path.resolve(currentDir, '..', '..', 'build', 'REAP', 'contract'),
+  zkConfigPath: path.resolve(currentDir, '..', '..', 'build', 'REAP'),
 };
 
 export interface Config {
