@@ -17,7 +17,7 @@ import {
   type FinalizedTransaction,
   type TransactionId,
   Transaction,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
 import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
@@ -27,7 +27,7 @@ import type {
 } from '@midnight-ntwrk/midnight-js-types';
 import { toHex, fromHex } from '@midnight-ntwrk/midnight-js-utils';
 
-import { ACTIVE_NETWORK } from './contracts.config';
+import { ACTIVE_NETWORK } from './utils/contracts.config';
 
 // ─── In-memory private state provider (browser-safe) ─────────────────────────
 
