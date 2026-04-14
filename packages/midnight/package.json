@@ -11,7 +11,7 @@
     "test:ui": "vitest --ui",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
-    "clean": "rm -rf build dist deployments"
+    "clean": "rm -rf build dist deployments logs"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-js": "2.5.0",
