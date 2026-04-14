@@ -1,7 +1,7 @@
 // Main exports for BrickChain Midnight package
 
 // Client
-export { BrickChainClient } from "./client/BrickChainClient.js";
+export { Client } from "./client/Client.js";
 
 // APIs
 export { PropertyRegistryAPI } from "./api/PropertyRegistryAPI.js";
@@ -17,14 +17,10 @@ export { RoleAPI } from "./api/RoleAPI.js";
 export * from "./types/contracts.js";
 
 // Config
-export * from "./config/network.js";
+export * from "./config/config.js";
 
 // Utils
-export * from "./utils/wallet.js";
 export * from "./utils/providers.js";
-
-// Deployment
-export * from "./deployment/deployer.js";
 
 // Errors
 export * from "./errors.js";
