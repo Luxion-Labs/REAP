@@ -1,8 +1,18 @@
-// Access Control API - Permission management
-
-// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
-import { createContractProviders, loadContractModule } from "../utils/providers.js";
-import { CONTRACT_PATHS } from "../config/network.js";
+import { 
+  type MidnightProviders,
+} from '@midnight-ntwrk/midnight-js/types';
+import { 
+  findDeployedContract, 
+  type FoundContract 
+} from '@midnight-ntwrk/midnight-js/contracts';
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Contract, Witnesses } from '../../build/REAP/contract/index.js';
+import { 
+  UnshieldedAddress,
+  MidnightBech32m 
+} from '@midnight-ntwrk/wallet-sdk-address-format';
+import { contractConfig } from '../config/config.js';
+import { logger } from '../utils/logger.js';
 
 export enum Permission {
   READ = 0,
@@ -14,90 +24,49 @@ export enum Permission {
   BURN = 6,
 }
 
+/**
+ * 🔐 REAP Access Control API Implementation (Modern SDK v4.0.4)
+ */
+
 export class AccessControlAPI {
-  private wallet: any;
-  private contractAddress: string;
-  private contract: any;
+  protected deployed?: FoundContract<Contract<any, Witnesses<any>>>;
+  protected compiledContract: any;
 
-  constructor(wallet: any, contractAddress: string) {
-    this.wallet = wallet;
-    this.contractAddress = contractAddress;
-  }
-
-  async initialize() {
-    const ContractModule = await loadContractModule(CONTRACT_PATHS.accessControl);
-    const providers = createContractProviders(
-      this.wallet,
-      CONTRACT_PATHS.accessControl,
-      "accessControlState"
-    );
-    this.contract = new ContractModule.Contract({});
-    return this;
-  }
-
-  async initializeAccessControl(adminAddress: string) {
-    return await this.contract.initializeAccessControl(this.addressToBytes32(adminAddress));
-  }
-
-  /**
-   * Grant permission to a user for a resource.
-   * grantId should be derived as hash(user || resourceId) for consistent lookup.
-   */
-  async grantPermission(
-    grantId: string,
-    userAddress: string,
-    resourceId: string,
-    callerAddress: string
+  constructor(
+    protected providers: MidnightProviders<any, string, any>,
+    protected contractAddress?: string
   ) {
-    return await this.contract.grantPermission(
-      this.stringToBytes32(grantId),
-      this.addressToBytes32(userAddress),
-      this.stringToBytes32(resourceId),
-      this.addressToBytes32(callerAddress)
+    this.compiledContract = CompiledContract.make('REAP', Contract).pipe(
+      CompiledContract.withVacantWitnesses,
+      CompiledContract.withCompiledFileAssets(contractConfig.zkConfigPath)
     );
   }
 
-  async revokePermission(grantId: string, userAddress: string, callerAddress: string) {
-    return await this.contract.revokePermission(
-      this.stringToBytes32(grantId),
-      this.addressToBytes32(userAddress),
-      this.addressToBytes32(callerAddress)
-    );
+  async init(): Promise<void> {
+    if (!this.contractAddress) {
+      throw new Error('Contract address is required for AccessControlAPI');
+    }
+
+    logger.info(`Connecting to Access Control contract at ${this.contractAddress}...`);
+
+    try {
+      this.deployed = await findDeployedContract(this.providers, {
+        contractAddress: this.contractAddress,
+        compiledContract: this.compiledContract,
+        privateStateId: 'reap-private-state',
+        initialPrivateState: {},
+      } as any);
+      logger.info('Successfully connected to Access Control contract');
+    } catch (error: any) {
+      logger.error(error, 'Failed to find deployed Access Control contract');
+      throw error;
+    }
   }
 
-  /**
-   * Check read permission. grantId must match the one used in grantPermission.
-   */
-  async hasReadPermission(grantId: string, userAddress: string) {
-    return await this.contract.hasReadPermission(
-      this.stringToBytes32(grantId),
-      this.addressToBytes32(userAddress)
-    );
+  private encodeAddress(address: string): Uint8Array {
+    return MidnightBech32m.parse(address).data;
   }
 
-  async hasWritePermission(grantId: string, userAddress: string) {
-    return await this.contract.hasWritePermission(
-      this.stringToBytes32(grantId),
-      this.addressToBytes32(userAddress)
-    );
-  }
-
-  async hasExecutePermission(grantId: string, userAddress: string) {
-    return await this.contract.hasExecutePermission(
-      this.stringToBytes32(grantId),
-      this.addressToBytes32(userAddress)
-    );
-  }
-
-  async pauseAccessControl(callerAddress: string) {
-    return await this.contract.pauseAccessControl(this.addressToBytes32(callerAddress));
-  }
-
-  async unpauseAccessControl(callerAddress: string) {
-    return await this.contract.unpauseAccessControl(this.addressToBytes32(callerAddress));
-  }
-
-  // Helper methods
   private stringToBytes32(str: string): Uint8Array {
     const bytes = new Uint8Array(32);
     const encoded = new TextEncoder().encode(str);
@@ -105,13 +74,61 @@ export class AccessControlAPI {
     return bytes;
   }
 
-  private addressToBytes32(address: string): Uint8Array {
-    const hex = address.startsWith("0x") ? address.slice(2) : address;
-    const padded = hex.padStart(64, "0").slice(0, 64);
-    const bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
+  async initializeAccessControl(adminAddress: string): Promise<void> {
+    await this.deployed?.callTx.initializeAccessControl(this.encodeAddress(adminAddress));
+  }
+
+  async grantPermission(
+    grantId: string,
+    userAddress: string,
+    resourceId: string,
+    callerAddress: string
+  ): Promise<void> {
+    await this.deployed?.callTx.grantPermission(
+      this.stringToBytes32(grantId),
+      this.encodeAddress(userAddress),
+      this.stringToBytes32(resourceId),
+      this.encodeAddress(callerAddress)
+    );
+  }
+
+  async revokePermission(grantId: string, userAddress: string, callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.revokePermission(
+      this.stringToBytes32(grantId),
+      this.encodeAddress(userAddress),
+      this.encodeAddress(callerAddress)
+    );
+  }
+
+  async hasReadPermission(grantId: string, userAddress: string): Promise<boolean> {
+    const txData = await this.deployed?.callTx.hasReadPermission(
+      this.stringToBytes32(grantId),
+      this.encodeAddress(userAddress)
+    );
+    return (txData?.private.result as any)[0] as boolean;
+  }
+
+  async hasWritePermission(grantId: string, userAddress: string): Promise<boolean> {
+    const txData = await this.deployed?.callTx.hasWritePermission(
+      this.stringToBytes32(grantId),
+      this.encodeAddress(userAddress)
+    );
+    return (txData?.private.result as any)[0] as boolean;
+  }
+
+  async hasExecutePermission(grantId: string, userAddress: string): Promise<boolean> {
+    const txData = await this.deployed?.callTx.hasExecutePermission(
+      this.stringToBytes32(grantId),
+      this.encodeAddress(userAddress)
+    );
+    return (txData?.private.result as any)[0] as boolean;
+  }
+
+  async pauseAccessControl(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.pauseAccessControl(this.encodeAddress(callerAddress));
+  }
+
+  async unpauseAccessControl(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.unpauseAccessControl(this.encodeAddress(callerAddress));
   }
 }

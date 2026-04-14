@@ -1,106 +1,69 @@
-// Marketplace API for frontend integration
+import { 
+  type MidnightProviders,
+} from '@midnight-ntwrk/midnight-js/types';
+import { 
+  findDeployedContract, 
+  type FoundContract 
+} from '@midnight-ntwrk/midnight-js/contracts';
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Contract, Witnesses } from '../../build/REAP/contract/index.js';
+import { 
+  UnshieldedAddress,
+  MidnightBech32m 
+} from '@midnight-ntwrk/wallet-sdk-address-format';
+import { contractConfig } from '../config/config.js';
+import { logger } from '../utils/logger.js';
 
-// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
-import { createContractProviders, loadContractModule } from "../utils/providers.js";
-import { CONTRACT_PATHS } from "../config/network.js";
-import type { ListingData, ListingStatus } from "../types/contracts.js";
+export enum ListingStatus {
+  ACTIVE = 0,
+  SOLD = 1,
+  CANCELLED = 2,
+  EXPIRED = 3,
+}
+
+/**
+ * 🏪 REAP Marketplace API Implementation (Modern SDK v4.0.4)
+ */
 
 export class MarketplaceAPI {
-  private wallet: any;
-  private contractAddress: string;
-  private contract: any;
-  private providers: any;
+  protected deployed?: FoundContract<Contract<any, Witnesses<any>>>;
+  protected compiledContract: any;
 
-  constructor(wallet: any, contractAddress: string) {
-    this.wallet = wallet;
-    this.contractAddress = contractAddress;
-  }
-
-  async initialize(): Promise<void> {
-    const ContractModule = await loadContractModule(CONTRACT_PATHS.marketplace);
-    this.contract = new ContractModule.Contract({});
-    this.providers = createContractProviders(
-      this.wallet,
-      CONTRACT_PATHS.marketplace,
-      "marketplaceState"
+  constructor(
+    protected providers: MidnightProviders<any, string, any>,
+    protected contractAddress?: string
+  ) {
+    this.compiledContract = CompiledContract.make('REAP', Contract).pipe(
+      CompiledContract.withVacantWitnesses,
+      CompiledContract.withCompiledFileAssets(contractConfig.zkConfigPath)
     );
   }
 
-  async createListing(
-    listingId: string,
-    propertyId: string,
-    price: bigint,
-    durationSeconds: bigint,
-    seller: string
-  ): Promise<void> {
-    if (!this.contract) await this.initialize();
+  async init(): Promise<void> {
+    if (!this.contractAddress) {
+      throw new Error('Contract address is required for MarketplaceAPI');
+    }
 
-    const timestamp = BigInt(Math.floor(Date.now() / 1000));
+    logger.info(`Connecting to Marketplace contract at ${this.contractAddress}...`);
 
-    await this.contract.createListing(
-      this.stringToBytes32(listingId),
-      this.stringToBytes32(propertyId),
-      price,
-      durationSeconds,
-      timestamp,
-      this.addressToBytes32(seller)
-    );
+    try {
+      this.deployed = await findDeployedContract(this.providers, {
+        contractAddress: this.contractAddress,
+        compiledContract: this.compiledContract,
+        privateStateId: 'reap-private-state',
+        initialPrivateState: {},
+      } as any);
+      logger.info('Successfully connected to Marketplace contract');
+    } catch (error: any) {
+      logger.error(error, 'Failed to find deployed Marketplace contract');
+      throw error;
+    }
   }
 
-  async getListing(listingId: string): Promise<ListingData> {
-    if (!this.contract) await this.initialize();
-
-    const listingIdBytes = this.stringToBytes32(listingId);
-    const [seller, propertyId, price, status] = await this.contract.getListing(listingIdBytes);
-    const [timestamp, duration] = await this.contract.getListingDetails(listingIdBytes);
-
-    return {
-      listingId,
-      propertyId: this.bytes32ToString(propertyId),
-      seller: this.bytes32ToAddress(seller),
-      price,
-      status: status as ListingStatus,
-      timestamp,
-      duration,
-    };
+  private encodeAddress(address: string): Uint8Array {
+    return MidnightBech32m.parse(address).data;
   }
 
-  async updateListing(listingId: string, newPrice: bigint, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-    await this.contract.updateListing(
-      this.stringToBytes32(listingId),
-      newPrice,
-      this.addressToBytes32(caller)
-    );
-  }
-
-  async cancelListing(listingId: string, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-    await this.contract.cancelListing(
-      this.stringToBytes32(listingId),
-      this.addressToBytes32(caller)
-    );
-  }
-
-  /**
-   * Purchase a listing.
-   * @param feeAmount - computed off-chain as: price * marketplaceFee / 10000
-   */
-  async purchaseListing(listingId: string, buyer: string, feeAmount: bigint): Promise<void> {
-    if (!this.contract) await this.initialize();
-    await this.contract.purchaseListing(
-      this.stringToBytes32(listingId),
-      this.addressToBytes32(buyer),
-      feeAmount
-    );
-  }
-
-  async getCollectedFees(caller: string): Promise<bigint> {
-    if (!this.contract) await this.initialize();
-    return await this.contract.getMarketplaceCollectedFees(this.addressToBytes32(caller));
-  }
-
-  // Helper methods
   private stringToBytes32(str: string): Uint8Array {
     const bytes = new Uint8Array(32);
     const encoded = new TextEncoder().encode(str);
@@ -108,26 +71,53 @@ export class MarketplaceAPI {
     return bytes;
   }
 
-  private bytes32ToString(bytes: Uint8Array): string {
-    return new TextDecoder().decode(bytes).replace(/\0/g, "");
+  async initializeMarketplace(adminAddress: string): Promise<void> {
+    await this.deployed?.callTx.initializeMarketplace(this.encodeAddress(adminAddress));
   }
 
-  private addressToBytes32(address: string): Uint8Array {
-    const hex = address.startsWith("0x") ? address.slice(2) : address;
-    const padded = hex.padStart(64, "0").slice(0, 64);
-    const bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
+  async createListing(
+    listingId: string,
+    propertyId: string,
+    price: bigint,
+    seller: string
+  ): Promise<void> {
+    await this.deployed?.callTx.createListing(
+      this.stringToBytes32(listingId),
+      this.stringToBytes32(propertyId),
+      price as any,
+      BigInt(86400 * 30), // 30 days duration
+      BigInt(Math.floor(Date.now() / 1000)),
+      this.encodeAddress(seller)
+    );
   }
 
-  private bytes32ToAddress(bytes: Uint8Array): string {
-    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  async buyProperty(listingId: string, buyer: string, feeAmount: bigint): Promise<void> {
+    await this.deployed?.callTx.purchaseListing(
+      this.stringToBytes32(listingId),
+      this.encodeAddress(buyer),
+      feeAmount as any
+    );
   }
 
-  /** Compute fee off-chain: price * basisPoints / 10000 */
-  static computeFee(price: bigint, basisPoints: bigint): bigint {
-    return (price * basisPoints) / 10000n;
+  async cancelListing(listingId: string, caller: string): Promise<void> {
+    await this.deployed?.callTx.cancelListing(
+      this.stringToBytes32(listingId),
+      this.encodeAddress(caller)
+    );
+  }
+
+  async getListingStatus(listingId: string): Promise<ListingStatus> {
+    const txData = await this.deployed?.callTx.getListing(this.stringToBytes32(listingId));
+    // The result is [property_id, seller_id, price, status]
+    return (txData?.private.result as any)[3] as ListingStatus;
+  }
+
+  async getMarketplaceCollectedFees(caller: string): Promise<bigint> {
+    const txData = await this.deployed?.callTx.collectFees(this.encodeAddress(caller));
+    return txData?.private.result as any as bigint;
+  }
+
+  async pauseMarketplace(caller: string): Promise<void> {
+    await this.deployed?.callTx.pauseMarketplace(this.encodeAddress(caller));
   }
 }

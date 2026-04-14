@@ -1,81 +1,106 @@
-// Role contract API - User role management
-
-// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
-import { createContractProviders, loadContractModule } from "../utils/providers.js";
-import { CONTRACT_PATHS } from "../config/network.js";
+import { 
+  type MidnightProviders,
+} from '@midnight-ntwrk/midnight-js/types';
+import { 
+  findDeployedContract, 
+  type FoundContract 
+} from '@midnight-ntwrk/midnight-js/contracts';
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Contract, Witnesses } from '../../build/REAP/contract/index.js';
+import { 
+  UnshieldedAddress,
+  MidnightBech32m 
+} from '@midnight-ntwrk/wallet-sdk-address-format';
+import { contractConfig } from '../config/config.js';
+import { logger } from '../utils/logger.js';
 
 export enum Role {
   USER = 0,
-  ADMIN = 1,
-  MODERATOR = 2,
+  VERIFIER = 1,
+  AGENT = 2,
+  ADMIN = 3,
+  SUPER_ADMIN = 4,
 }
 
+/**
+ * 👤 REAP Role API Implementation (Modern SDK v4.0.4)
+ */
+
 export class RoleAPI {
-  private wallet: any;
-  private contractAddress: string;
-  private contract: any;
+  protected deployed?: FoundContract<Contract<any, Witnesses<any>>>;
+  protected compiledContract: any;
 
-  constructor(wallet: any, contractAddress: string) {
-    this.wallet = wallet;
-    this.contractAddress = contractAddress;
-  }
-
-  async initialize() {
-    const ContractModule = await loadContractModule(CONTRACT_PATHS.role);
-    const providers = createContractProviders(this.wallet, CONTRACT_PATHS.role, "roleState");
-    this.contract = new ContractModule.Contract({});
-    return this;
-  }
-
-  async initializeRoles(adminAddress: string) {
-    return await this.contract.initialize_roles(this.addressToBytes32(adminAddress));
-  }
-
-  async setRole(userAddress: string, role: Role, callerAddress: string) {
-    return await this.contract.set_role(
-      this.addressToBytes32(userAddress),
-      role,
-      this.addressToBytes32(callerAddress)
+  constructor(
+    protected providers: MidnightProviders<any, string, any>,
+    protected contractAddress?: string
+  ) {
+    this.compiledContract = CompiledContract.make('REAP', Contract).pipe(
+      CompiledContract.withVacantWitnesses,
+      CompiledContract.withCompiledFileAssets(contractConfig.zkConfigPath)
     );
   }
 
-  async getUserRole(userAddress: string) {
-    return await this.contract.get_user_role(this.addressToBytes32(userAddress));
-  }
-
-  async removeRole(userAddress: string, callerAddress: string) {
-    return await this.contract.remove_role(
-      this.addressToBytes32(userAddress),
-      this.addressToBytes32(callerAddress)
-    );
-  }
-
-  async isUserAdmin(userAddress: string) {
-    return await this.contract.is_user_admin(this.addressToBytes32(userAddress));
-  }
-
-  async transferAdmin(newAdminAddress: string, callerAddress: string) {
-    return await this.contract.transfer_admin(
-      this.addressToBytes32(newAdminAddress),
-      this.addressToBytes32(callerAddress)
-    );
-  }
-
-  async pauseContract(callerAddress: string) {
-    return await this.contract.pause_contract(this.addressToBytes32(callerAddress));
-  }
-
-  async unpauseContract(callerAddress: string) {
-    return await this.contract.unpause_contract(this.addressToBytes32(callerAddress));
-  }
-
-  private addressToBytes32(address: string): Uint8Array {
-    const hex = address.startsWith("0x") ? address.slice(2) : address;
-    const padded = hex.padStart(64, "0").slice(0, 64);
-    const bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+  async init(): Promise<void> {
+    if (!this.contractAddress) {
+      throw new Error('Contract address is required for RoleAPI');
     }
-    return bytes;
+
+    logger.info(`Connecting to Role contract at ${this.contractAddress}...`);
+
+    try {
+      this.deployed = await findDeployedContract(this.providers, {
+        contractAddress: this.contractAddress,
+        compiledContract: this.compiledContract,
+        privateStateId: 'reap-private-state',
+        initialPrivateState: {},
+      } as any);
+      logger.info('Successfully connected to Role contract');
+    } catch (error: any) {
+      logger.error(error, 'Failed to find deployed Role contract');
+      throw error;
+    }
+  }
+
+  private encodeAddress(address: string): Uint8Array {
+    return MidnightBech32m.parse(address).data;
+  }
+
+  async initializeRole(adminAddress: string): Promise<void> {
+    await this.deployed?.callTx.initialize_roles(this.encodeAddress(adminAddress));
+  }
+
+  async assignRole(userAddress: string, role: Role, callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.set_role(
+      this.encodeAddress(userAddress),
+      role as any,
+      this.encodeAddress(callerAddress)
+    );
+  }
+
+  async revokeRole(userAddress: string, callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.remove_role(
+      this.encodeAddress(userAddress),
+      this.encodeAddress(callerAddress)
+    );
+  }
+
+  async getUserRole(userAddress: string): Promise<Role> {
+    const txData = await this.deployed?.callTx.get_user_role(this.encodeAddress(userAddress));
+    return txData?.private.result as any as Role;
+  }
+
+  async hasRole(userAddress: string, role: Role): Promise<boolean> {
+    const txData = await this.deployed?.callTx.is_user_admin(
+      this.encodeAddress(userAddress)
+    );
+    return txData?.private.result as any as boolean;
+  }
+
+  async pauseRole(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.pause_contract(this.encodeAddress(callerAddress));
+  }
+
+  async unpauseRole(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.unpause_contract(this.encodeAddress(callerAddress));
   }
 }

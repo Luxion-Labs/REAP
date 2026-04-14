@@ -1,108 +1,70 @@
-// Verification API for frontend integration
+import { 
+  type MidnightProviders,
+} from '@midnight-ntwrk/midnight-js/types';
+import { 
+  findDeployedContract, 
+  type FoundContract 
+} from '@midnight-ntwrk/midnight-js/contracts';
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Contract, Witnesses } from '../../build/REAP/contract/index.js';
+import { 
+  UnshieldedAddress,
+  MidnightBech32m 
+} from '@midnight-ntwrk/wallet-sdk-address-format';
+import { contractConfig } from '../config/config.js';
+import { logger } from '../utils/logger.js';
 
-// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
-import { createContractProviders, loadContractModule } from "../utils/providers.js";
-import { CONTRACT_PATHS } from "../config/network.js";
-import type { VerificationRequest, VerificationStatus } from "../types/contracts.js";
+export enum VerificationStatus {
+  UNVERIFIED = 0,
+  PENDING = 1,
+  VERIFIED = 2,
+  EXPIRED = 3,
+  REVOKED = 4,
+}
+
+/**
+ * ✅ REAP Verification API Implementation (Modern SDK v4.0.4)
+ */
 
 export class VerificationAPI {
-  private wallet: any;
-  private contractAddress: string;
-  private contract: any;
-  private providers: any;
+  protected deployed?: FoundContract<Contract<any, Witnesses<any>>>;
+  protected compiledContract: any;
 
-  constructor(wallet: any, contractAddress: string) {
-    this.wallet = wallet;
-    this.contractAddress = contractAddress;
-  }
-
-  async initialize(): Promise<void> {
-    const ContractModule = await loadContractModule(CONTRACT_PATHS.verification);
-    this.contract = new ContractModule.Contract({});
-    this.providers = createContractProviders(
-      this.wallet,
-      CONTRACT_PATHS.verification,
-      "verificationState"
+  constructor(
+    protected providers: MidnightProviders<any, string, any>,
+    protected contractAddress?: string
+  ) {
+    this.compiledContract = CompiledContract.make('REAP', Contract).pipe(
+      CompiledContract.withVacantWitnesses,
+      CompiledContract.withCompiledFileAssets(contractConfig.zkConfigPath)
     );
   }
 
-  async requestVerification(
-    requestId: string,
-    propertyId: string,
-    documentHash: string,
-    requester: string
-  ): Promise<void> {
-    if (!this.contract) await this.initialize();
+  async init(): Promise<void> {
+    if (!this.contractAddress) {
+      throw new Error('Contract address is required for VerificationAPI');
+    }
 
-    const timestamp = BigInt(Math.floor(Date.now() / 1000));
+    logger.info(`Connecting to Verification contract at ${this.contractAddress}...`);
 
-    await this.contract.requestVerification(
-      this.stringToBytes32(requestId),
-      this.stringToBytes32(propertyId),
-      this.stringToBytes64(documentHash),
-      timestamp,
-      this.addressToBytes32(requester)
-    );
+    try {
+      this.deployed = await findDeployedContract(this.providers, {
+        contractAddress: this.contractAddress,
+        compiledContract: this.compiledContract,
+        privateStateId: 'reap-private-state',
+        initialPrivateState: {},
+      } as any);
+      logger.info('Successfully connected to Verification contract');
+    } catch (error: any) {
+      logger.error(error, 'Failed to find deployed Verification contract');
+      throw error;
+    }
   }
 
-  async getVerificationStatus(requestId: string): Promise<VerificationRequest> {
-    if (!this.contract) await this.initialize();
-
-    const [status, requester, propertyId] = await this.contract.getVerificationStatus(
-      this.stringToBytes32(requestId)
-    );
-
-    return {
-      requestId,
-      propertyId: this.bytes32ToString(propertyId),
-      requester: this.bytes32ToAddress(requester),
-      status: status as VerificationStatus,
-      documentHash: "",
-      timestamp: 0n,
-    };
+  private encodeAddress(address: string): Uint8Array {
+    return MidnightBech32m.parse(address).data;
   }
 
-  async approveVerifier(verifier: string, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-    await this.contract.approveVerifier(
-      this.addressToBytes32(verifier),
-      this.addressToBytes32(caller)
-    );
-  }
-
-  async startVerification(requestId: string, verifier: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-    await this.contract.startVerification(
-      this.stringToBytes32(requestId),
-      this.addressToBytes32(verifier)
-    );
-  }
-
-  async submitVerificationResult(
-    requestId: string,
-    resultHash: string,
-    approved: boolean,
-    verifier: string
-  ): Promise<void> {
-    if (!this.contract) await this.initialize();
-    await this.contract.submitVerificationResult(
-      this.stringToBytes32(requestId),
-      this.stringToBytes128(resultHash),
-      approved,
-      this.addressToBytes32(verifier)
-    );
-  }
-
-  async verifyProof(requestId: string, proofData: string, caller: string): Promise<boolean> {
-    if (!this.contract) await this.initialize();
-    return await this.contract.verifyProof(
-      this.stringToBytes32(requestId),
-      this.stringToBytes128(proofData),
-      this.addressToBytes32(caller)
-    );
-  }
-
-  // Helper methods
   private stringToBytes32(str: string): Uint8Array {
     const bytes = new Uint8Array(32);
     const encoded = new TextEncoder().encode(str);
@@ -110,35 +72,53 @@ export class VerificationAPI {
     return bytes;
   }
 
-  private stringToBytes64(str: string): Uint8Array {
-    const bytes = new Uint8Array(64);
-    const encoded = new TextEncoder().encode(str);
-    bytes.set(encoded.slice(0, 64));
-    return bytes;
+  async initializeVerification(adminAddress: string): Promise<void> {
+    await this.deployed?.callTx.initializeVerification(this.encodeAddress(adminAddress));
   }
 
-  private stringToBytes128(str: string): Uint8Array {
-    const bytes = new Uint8Array(128);
-    const encoded = new TextEncoder().encode(str);
-    bytes.set(encoded.slice(0, 128));
-    return bytes;
+  async submitVerification(
+    requestId: string,
+    propertyId: string,
+    documentHash: string,
+    requester: string
+  ): Promise<void> {
+    await this.deployed?.callTx.requestVerification(
+      this.stringToBytes32(requestId),
+      this.stringToBytes32(propertyId),
+      this.stringToBytes32(documentHash),
+      BigInt(Math.floor(Date.now() / 1000)),
+      this.encodeAddress(requester)
+    );
   }
 
-  private bytes32ToString(bytes: Uint8Array): string {
-    return new TextDecoder().decode(bytes).replace(/\0/g, "");
+  async approveVerification(requestId: string, resultHash: string, approved: boolean, verifier: string): Promise<void> {
+    await this.deployed?.callTx.submitVerificationResult(
+      this.stringToBytes32(requestId),
+      this.stringToBytes32(resultHash),
+      approved,
+      this.encodeAddress(verifier)
+    );
   }
 
-  private addressToBytes32(address: string): Uint8Array {
-    const hex = address.startsWith("0x") ? address.slice(2) : address;
-    const padded = hex.padStart(64, "0").slice(0, 64);
-    const bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
+  async revokeVerification(verifier: string, caller: string): Promise<void> {
+    await this.deployed?.callTx.removeVerifier(
+      this.encodeAddress(verifier),
+      this.encodeAddress(caller)
+    );
   }
 
-  private bytes32ToAddress(bytes: Uint8Array): string {
-    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  async getVerificationStatus(requestId: string): Promise<VerificationStatus> {
+    const txData = await this.deployed?.callTx.getVerificationStatus(this.stringToBytes32(requestId));
+    // result is [status, verifier_id, result_hash]
+    return (txData?.private.result as any)[0] as VerificationStatus;
+  }
+
+  async getVerificationCollectedFees(): Promise<bigint> {
+    const txData = await this.deployed?.callTx.getVerificationCollectedFees();
+    return txData?.private.result as any as bigint;
+  }
+
+  async pauseVerification(caller: string): Promise<void> {
+    await this.deployed?.callTx.pauseVerification(this.encodeAddress(caller));
   }
 }

@@ -1,92 +1,108 @@
-// Main contract API - System orchestrator
+import { 
+  type MidnightProviders,
+} from '@midnight-ntwrk/midnight-js/types';
+import { 
+  findDeployedContract, 
+  type FoundContract 
+} from '@midnight-ntwrk/midnight-js/contracts';
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Contract, Witnesses } from '../../build/REAP/contract/index.js';
+import { 
+  UnshieldedAddress,
+  MidnightBech32m 
+} from '@midnight-ntwrk/wallet-sdk-address-format';
+import { contractConfig } from '../config/config.js';
+import { logger } from '../utils/logger.js';
 
-// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
-import { createContractProviders, loadContractModule } from "../utils/providers.js";
-import { CONTRACT_PATHS } from "../config/network.js";
+/**
+ * 🏛️ REAP Main API Implementation (Modern SDK v4.0.4)
+ */
 
 export class MainAPI {
-  private wallet: any;
-  private contractAddress: string;
-  private contract: any;
+  protected deployed?: FoundContract<Contract<REAPPrivateState, Witnesses<REAPPrivateState>>>;
+  protected compiledContract: any;
 
-  constructor(wallet: any, contractAddress: string) {
-    this.wallet = wallet;
-    this.contractAddress = contractAddress;
-  }
-
-  async initialize() {
-    const ContractModule = await loadContractModule(CONTRACT_PATHS.main);
-    const providers = createContractProviders(this.wallet, CONTRACT_PATHS.main, "mainState");
-    this.contract = new ContractModule.Contract({});
-    return this;
-  }
-
-  async initializeSystem(adminAddress: string) {
-    return await this.contract.initializeSystem(this.addressToBytes32(adminAddress));
-  }
-
-  async emergencyPause(callerAddress: string) {
-    return await this.contract.emergencyPause(this.addressToBytes32(callerAddress));
-  }
-
-  async emergencyUnpause(callerAddress: string) {
-    return await this.contract.emergencyUnpause(this.addressToBytes32(callerAddress));
-  }
-
-  async getSystemStatus() {
-    return await this.contract.getSystemStatus();
-  }
-
-  async isSystemOperational() {
-    return await this.contract.isSystemOperational();
-  }
-
-  async getTotalUsers() {
-    return await this.contract.getTotalUsers();
-  }
-
-  async getTotalProperties() {
-    return await this.contract.getTotalProperties();
-  }
-
-  async getTotalTransactions() {
-    return await this.contract.getTotalTransactions();
-  }
-
-  async incrementUserCount(callerAddress: string) {
-    return await this.contract.incrementUserCount(this.addressToBytes32(callerAddress));
-  }
-
-  async incrementPropertyCount(callerAddress: string) {
-    return await this.contract.incrementPropertyCount(this.addressToBytes32(callerAddress));
-  }
-
-  async incrementTransactionCount(callerAddress: string) {
-    return await this.contract.incrementTransactionCount(this.addressToBytes32(callerAddress));
-  }
-
-  async getCollectedFees() {
-    return await this.contract.getCollectedFees();
-  }
-
-  async withdrawCollectedFees(callerAddress: string) {
-    return await this.contract.withdrawCollectedFees(this.addressToBytes32(callerAddress));
-  }
-
-  async transferAdmin(newAdminAddress: string, callerAddress: string) {
-    return await this.contract.transferAdmin(
-      this.addressToBytes32(newAdminAddress),
-      this.addressToBytes32(callerAddress)
+  constructor(
+    protected providers: MidnightProviders<any, string, any>,
+    protected contractAddress?: string
+  ) {
+    // 🔗 Initialize the pipeable CompiledContract
+    this.compiledContract = CompiledContract.make('REAP', Contract).pipe(
+      CompiledContract.withVacantWitnesses,
+      CompiledContract.withCompiledFileAssets(contractConfig.zkConfigPath)
     );
   }
 
-  private addressToBytes32(address: string): Uint8Array {
-    const hex = address.startsWith("0x") ? address.slice(2) : address;
-    const padded = hex.padStart(64, "0").slice(0, 64);
-    const bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+  async init(): Promise<void> {
+    if (!this.contractAddress) {
+      throw new Error('Contract address is required for API interaction');
     }
-    return bytes;
+
+    logger.info(`Connecting to REAP contract at ${this.contractAddress}...`);
+
+    try {
+      this.deployed = await findDeployedContract(this.providers, {
+        contractAddress: this.contractAddress,
+        compiledContract: this.compiledContract,
+        privateStateId: 'reap-private-state',
+        initialPrivateState: {} as REAPPrivateState,
+      } as any);
+      logger.info('Successfully connected to REAP contract');
+    } catch (error: any) {
+      logger.error('Failed to find deployed REAP contract', error);
+      throw error;
+    }
+  }
+
+  // Helper to convert Bech32m strings back to raw bytes for circuits
+  private encodeAddress(address: string): Uint8Array {
+    try {
+      return MidnightBech32m.parse(address).data;
+    } catch (e: any) {
+      logger.error(e, `Failed to parse address: ${address}`);
+      throw e;
+    }
+  }
+
+  async initializeSystem(adminAddress: string): Promise<void> {
+    await this.deployed?.callTx.initializeSystem(this.encodeAddress(adminAddress));
+  }
+
+  async emergencyPause(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.emergencyPause(this.encodeAddress(callerAddress));
+  }
+
+  async emergencyUnpause(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.emergencyUnpause(this.encodeAddress(callerAddress));
+  }
+
+  async getSystemStatus(): Promise<any> {
+    const txData = await this.deployed?.callTx.getSystemStatus();
+    return txData?.private.result;
+  }
+
+  async isSystemOperational(): Promise<boolean> {
+    const txData = await this.deployed?.callTx.isSystemOperational();
+    return txData?.private.result as any as boolean;
+  }
+
+  async getTotalUsers(): Promise<bigint> {
+    const txData = await this.deployed?.callTx.getTotalUsers();
+    return txData?.private.result as any as bigint;
+  }
+
+  async incrementUserCount(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.incrementUserCount(this.encodeAddress(callerAddress));
+  }
+
+  async getCollectedFees(): Promise<bigint> {
+    const txData = await this.deployed?.callTx.getCollectedFees();
+    return txData?.private.result as any as bigint;
+  }
+
+  async withdrawCollectedFees(callerAddress: string): Promise<void> {
+    await this.deployed?.callTx.withdrawCollectedFees(this.encodeAddress(callerAddress));
   }
 }
+
+export type REAPPrivateState = any;

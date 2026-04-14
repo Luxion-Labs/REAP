@@ -1,104 +1,70 @@
-// Escrow API for frontend integration
+import { 
+  type MidnightProviders,
+} from '@midnight-ntwrk/midnight-js/types';
+import { 
+  findDeployedContract, 
+  type FoundContract 
+} from '@midnight-ntwrk/midnight-js/contracts';
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Contract, Witnesses } from '../../build/REAP/contract/index.js';
+import { 
+  UnshieldedAddress,
+  MidnightBech32m 
+} from '@midnight-ntwrk/wallet-sdk-address-format';
+import { contractConfig } from '../config/config.js';
+import { logger } from '../utils/logger.js';
 
-// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
-import { createContractProviders, loadContractModule } from "../utils/providers.js";
-import { CONTRACT_PATHS } from "../config/network.js";
-import type { EscrowData, EscrowStatus } from "../types/contracts.js";
+export enum EscrowStatus {
+  PENDING = 0,
+  FUNDS_DEPOSITED = 1,
+  COMPLETED = 2,
+  CANCELLED = 3,
+  DISPUTED = 4,
+}
+
+/**
+ * 💰 REAP Escrow API Implementation (Modern SDK v4.0.4)
+ */
 
 export class EscrowAPI {
-  private wallet: any;
-  private contractAddress: string;
-  private contract: any;
-  private providers: any;
+  protected deployed?: FoundContract<Contract<any, Witnesses<any>>>;
+  protected compiledContract: any;
 
-  constructor(wallet: any, contractAddress: string) {
-    this.wallet = wallet;
-    this.contractAddress = contractAddress;
-  }
-
-  async initialize(): Promise<void> {
-    const ContractModule = await loadContractModule(CONTRACT_PATHS.escrow);
-    this.contract = new ContractModule.Contract({});
-    this.providers = createContractProviders(
-      this.wallet,
-      CONTRACT_PATHS.escrow,
-      "escrowState"
+  constructor(
+    protected providers: MidnightProviders<any, string, any>,
+    protected contractAddress?: string
+  ) {
+    this.compiledContract = CompiledContract.make('REAP', Contract).pipe(
+      CompiledContract.withVacantWitnesses,
+      CompiledContract.withCompiledFileAssets(contractConfig.zkConfigPath)
     );
   }
 
-  async depositEscrow(
-    escrowId: string,
-    listingId: string,
-    seller: string,
-    buyer: string,
-    amount: bigint
-  ): Promise<void> {
-    if (!this.contract) await this.initialize();
+  async init(): Promise<void> {
+    if (!this.contractAddress) {
+      throw new Error('Contract address is required for EscrowAPI');
+    }
 
-    const timestamp = BigInt(Math.floor(Date.now() / 1000));
+    logger.info(`Connecting to Escrow contract at ${this.contractAddress}...`);
 
-    await this.contract.depositEscrow(
-      this.stringToBytes32(escrowId),
-      this.stringToBytes32(listingId),
-      this.addressToBytes32(seller),
-      this.addressToBytes32(buyer),
-      amount,
-      timestamp
-    );
+    try {
+      this.deployed = await findDeployedContract(this.providers, {
+        contractAddress: this.contractAddress,
+        compiledContract: this.compiledContract,
+        privateStateId: 'reap-private-state',
+        initialPrivateState: {},
+      } as any);
+      logger.info('Successfully connected to Escrow contract');
+    } catch (error: any) {
+      logger.error(error, 'Failed to find deployed Escrow contract');
+      throw error;
+    }
   }
 
-  async getEscrow(escrowId: string): Promise<EscrowData> {
-    if (!this.contract) await this.initialize();
-
-    const escrowIdBytes = this.stringToBytes32(escrowId);
-    const [buyer, seller, amount, status] = await this.contract.getEscrow(escrowIdBytes);
-    const [createdAt, releasedAt] = await this.contract.getEscrowTimestamps(escrowIdBytes);
-
-    return {
-      escrowId,
-      listingId: "",
-      buyer: this.bytes32ToAddress(buyer),
-      seller: this.bytes32ToAddress(seller),
-      amount,
-      status: status as EscrowStatus,
-      createdAt,
-      releasedAt: releasedAt > 0n ? releasedAt : undefined,
-    };
+  private encodeAddress(address: string): Uint8Array {
+    return MidnightBech32m.parse(address).data;
   }
 
-  async releaseEscrow(escrowId: string, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-
-    const timestamp = BigInt(Math.floor(Date.now() / 1000));
-
-    await this.contract.releaseEscrow(
-      this.stringToBytes32(escrowId),
-      this.addressToBytes32(caller),
-      timestamp
-    );
-  }
-
-  async fileDispute(escrowId: string, disputeReason: string, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-
-    await this.contract.fileDispute(
-      this.stringToBytes32(escrowId),
-      this.stringToBytes128(disputeReason),
-      this.addressToBytes32(caller)
-    );
-  }
-
-  async resolveDispute(escrowId: string, releaseToSeller: boolean, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-
-    await this.contract.resolveDispute(
-      this.stringToBytes32(escrowId),
-      releaseToSeller,
-      this.addressToBytes32(caller)
-    );
-  }
-
-  // Helper methods
   private stringToBytes32(str: string): Uint8Array {
     const bytes = new Uint8Array(32);
     const encoded = new TextEncoder().encode(str);
@@ -106,24 +72,55 @@ export class EscrowAPI {
     return bytes;
   }
 
-  private stringToBytes128(str: string): Uint8Array {
-    const bytes = new Uint8Array(128);
-    const encoded = new TextEncoder().encode(str);
-    bytes.set(encoded.slice(0, 128));
-    return bytes;
+  async initializeEscrow(adminAddress: string): Promise<void> {
+    await this.deployed?.callTx.initializeEscrow(this.encodeAddress(adminAddress));
   }
 
-  private addressToBytes32(address: string): Uint8Array {
-    const hex = address.startsWith("0x") ? address.slice(2) : address;
-    const padded = hex.padStart(64, "0").slice(0, 64);
-    const bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
+  async createEscrow(
+    escrowId: string,
+    listingId: string,
+    seller: string,
+    buyer: string,
+    amount: bigint
+  ): Promise<void> {
+    await this.deployed?.callTx.depositEscrow(
+      this.stringToBytes32(escrowId),
+      this.stringToBytes32(listingId),
+      this.encodeAddress(seller),
+      this.encodeAddress(buyer),
+      amount as any,
+      BigInt(Math.floor(Date.now() / 1000))
+    );
   }
 
-  private bytes32ToAddress(bytes: Uint8Array): string {
-    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  async releaseFunds(escrowId: string, caller: string): Promise<void> {
+    await this.deployed?.callTx.releaseEscrow(
+      this.stringToBytes32(escrowId),
+      this.encodeAddress(caller),
+      BigInt(Math.floor(Date.now() / 1000))
+    );
+  }
+
+  async resolveDispute(escrowId: string, releaseToSeller: boolean, caller: string): Promise<void> {
+    await this.deployed?.callTx.resolveDispute(
+      this.stringToBytes32(escrowId),
+      releaseToSeller,
+      this.encodeAddress(caller)
+    );
+  }
+
+  async getEscrowStatus(escrowId: string): Promise<EscrowStatus> {
+    const txData = await this.deployed?.callTx.getEscrow(this.stringToBytes32(escrowId));
+    // The result is [buyer, seller, amount, status]
+    return (txData?.private.result as any)[3] as EscrowStatus;
+  }
+
+  async getEscrowCollectedFees(caller: string): Promise<bigint> {
+    const txData = await this.deployed?.callTx.collectEscrowFees(this.encodeAddress(caller));
+    return txData?.private.result as any as bigint;
+  }
+
+  async pauseEscrow(caller: string): Promise<void> {
+    await this.deployed?.callTx.pauseEscrow(this.encodeAddress(caller));
   }
 }

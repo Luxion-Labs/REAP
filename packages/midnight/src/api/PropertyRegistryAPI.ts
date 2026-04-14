@@ -1,29 +1,79 @@
-// Property Registry API for frontend integration
+import { 
+  type MidnightProviders,
+} from '@midnight-ntwrk/midnight-js/types';
+import { 
+  findDeployedContract, 
+  type FoundContract 
+} from '@midnight-ntwrk/midnight-js/contracts';
+import { CompiledContract } from '@midnight-ntwrk/compact-js';
+import { Contract, Witnesses } from '../../build/REAP/contract/index.js';
+import { 
+  UnshieldedAddress,
+  MidnightBech32m 
+} from '@midnight-ntwrk/wallet-sdk-address-format';
+import { contractConfig } from '../config/config.js';
+import { logger } from '../utils/logger.js';
 
-// Wallet type from @midnight-ntwrk/wallet-api (v5 API)
-import { createContractProviders, loadContractModule } from "../utils/providers.js";
-import { CONTRACT_PATHS } from "../config/network.js";
-import type { PropertyData, PropertyStatus } from "../types/contracts.js";
+export enum PropertyStatus {
+  PENDING = 0,
+  VERIFIED = 1,
+  FRACTIONALIZED = 2,
+  SOLD = 3,
+  BLOCKED = 4,
+}
+
+/**
+ * 🏠 REAP Property Registry API Implementation (Modern SDK v4.0.4)
+ */
 
 export class PropertyRegistryAPI {
-  private wallet: any;
-  private contractAddress: string;
-  private contract: any;
-  private providers: any;
+  protected deployed?: FoundContract<Contract<any, Witnesses<any>>>;
+  protected compiledContract: any;
 
-  constructor(wallet: any, contractAddress: string) {
-    this.wallet = wallet;
-    this.contractAddress = contractAddress;
+  constructor(
+    protected providers: MidnightProviders<any, string, any>,
+    protected contractAddress?: string
+  ) {
+    this.compiledContract = CompiledContract.make('REAP', Contract).pipe(
+      CompiledContract.withVacantWitnesses,
+      CompiledContract.withCompiledFileAssets(contractConfig.zkConfigPath)
+    );
   }
 
-  async initialize(): Promise<void> {
-    const ContractModule = await loadContractModule(CONTRACT_PATHS.propertyRegistry);
-    this.contract = new ContractModule.Contract({});
-    this.providers = createContractProviders(
-      this.wallet,
-      CONTRACT_PATHS.propertyRegistry,
-      "propertyRegistryState"
-    );
+  async init(): Promise<void> {
+    if (!this.contractAddress) {
+      throw new Error('Contract address is required for PropertyRegistryAPI');
+    }
+
+    logger.info(`Connecting to Property Registry contract at ${this.contractAddress}...`);
+
+    try {
+      this.deployed = await findDeployedContract(this.providers, {
+        contractAddress: this.contractAddress,
+        compiledContract: this.compiledContract,
+        privateStateId: 'reap-private-state',
+        initialPrivateState: {},
+      } as any);
+      logger.info('Successfully connected to Property Registry contract');
+    } catch (error: any) {
+      logger.error(error, 'Failed to find deployed Property Registry contract');
+      throw error;
+    }
+  }
+
+  private encodeAddress(address: string): Uint8Array {
+    return MidnightBech32m.parse(address).data;
+  }
+
+  private stringToBytes32(str: string): Uint8Array {
+    const bytes = new Uint8Array(32);
+    const encoded = new TextEncoder().encode(str);
+    bytes.set(encoded.slice(0, 32));
+    return bytes;
+  }
+
+  async initializeRegistry(adminAddress: string): Promise<void> {
+    await this.deployed?.callTx.initializeRegistry(this.encodeAddress(adminAddress));
   }
 
   async registerProperty(
@@ -33,97 +83,44 @@ export class PropertyRegistryAPI {
     locationHash: string,
     documentHash: string
   ): Promise<void> {
-    if (!this.contract) await this.initialize();
-
-    await this.contract.registerProperty(
+    await this.deployed?.callTx.registerProperty(
       this.stringToBytes32(propertyId),
-      this.addressToBytes32(owner),
-      valuation,
-      this.stringToBytes64(locationHash),
-      this.stringToBytes64(documentHash)
+      this.encodeAddress(owner),
+      valuation as any,
+      this.stringToBytes32(locationHash),
+      this.stringToBytes32(documentHash)
     );
-  }
-
-  async getProperty(propertyId: string): Promise<PropertyData> {
-    if (!this.contract) await this.initialize();
-
-    const propertyIdBytes = this.stringToBytes32(propertyId);
-    const [owner, status, value] = await this.contract.getProperty(propertyIdBytes);
-    const [location, documents] = await this.contract.getPropertyMetadata(propertyIdBytes);
-
-    return {
-      propertyId,
-      owner: this.bytes32ToAddress(owner),
-      status: status as PropertyStatus,
-      valuation: value,
-      locationHash: this.bytes64ToString(location),
-      documentHash: this.bytes64ToString(documents),
-    };
   }
 
   async updatePropertyStatus(
     propertyId: string,
-    newStatus: PropertyStatus,
+    status: PropertyStatus,
     caller: string
   ): Promise<void> {
-    if (!this.contract) await this.initialize();
-
-    await this.contract.updatePropertyStatus(
+    await this.deployed?.callTx.updatePropertyStatus(
       this.stringToBytes32(propertyId),
-      newStatus,
-      this.addressToBytes32(caller)
+      status as any,
+      this.encodeAddress(caller)
     );
   }
 
-  async transferProperty(propertyId: string, newOwner: string, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-
-    await this.contract.transferProperty(
-      this.stringToBytes32(propertyId),
-      this.addressToBytes32(newOwner),
-      this.addressToBytes32(caller)
-    );
+  async getPropertyStatus(propertyId: string): Promise<PropertyStatus> {
+    const txData = await this.deployed?.callTx.getPropertyStatus(this.stringToBytes32(propertyId));
+    return txData?.private.result as any as PropertyStatus;
   }
 
-  async verifyProperty(propertyId: string, caller: string): Promise<void> {
-    if (!this.contract) await this.initialize();
-
-    await this.contract.verifyProperty(
-      this.stringToBytes32(propertyId),
-      this.addressToBytes32(caller)
-    );
+  async getPropertyOwner(propertyId: string): Promise<string> {
+    const txData = await this.deployed?.callTx.getPropertyOwner(this.stringToBytes32(propertyId));
+    // Implementation must handle Bech32m encoding for the return value if needed
+    return txData?.private.result as any as string;
   }
 
-  // Helper methods
-  private stringToBytes32(str: string): Uint8Array {
-    const bytes = new Uint8Array(32);
-    const encoded = new TextEncoder().encode(str);
-    bytes.set(encoded.slice(0, 32));
-    return bytes;
+  async getRegistryCollectedFees(): Promise<bigint> {
+    const txData = await this.deployed?.callTx.getRegistryCollectedFees();
+    return txData?.private.result as any as bigint;
   }
 
-  private stringToBytes64(str: string): Uint8Array {
-    const bytes = new Uint8Array(64);
-    const encoded = new TextEncoder().encode(str);
-    bytes.set(encoded.slice(0, 64));
-    return bytes;
-  }
-
-  private bytes64ToString(bytes: Uint8Array): string {
-    return new TextDecoder().decode(bytes).replace(/\0/g, "");
-  }
-
-  private addressToBytes32(address: string): Uint8Array {
-    const hex = address.startsWith("0x") ? address.slice(2) : address;
-    const padded = hex.padStart(64, "0").slice(0, 64);
-    const bytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
-  }
-
-  private bytes32ToAddress(bytes: Uint8Array): string {
-    return "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  async pauseRegistry(caller: string): Promise<void> {
+    await this.deployed?.callTx.pauseRegistry(this.encodeAddress(caller));
   }
 }

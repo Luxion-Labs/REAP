@@ -11,5 +11,4 @@ export { AccessControlAPI, Permission } from "./AccessControlAPI.js";
 export { AuditLogAPI, EventType } from "./AuditLogAPI.js";
 
 export * from "../types/contracts.js";
-export * from "../config/network.js";
-export * from "../utils/wallet.js";
+export * from "../config/config.js";
