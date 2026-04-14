@@ -29,6 +29,7 @@ export const metadata: Metadata = {
 
 import { WalletProvider } from '@/components/providers/wallet-provider';
 import { ContractProvider } from '@/components/providers/contract-provider';
+import { Navbar } from '@/components/layout/Navbar';
 import { Toaster } from 'react-hot-toast';
 
 export default function RootLayout({
@@ -39,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${dmSerif.variable} ${inter.variable} ${jbMono.variable}`}>
       <body className="bg-slate-950 text-white font-sans antialiased overflow-x-hidden selection:bg-slate-300/40 selection:text-slate-900">
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="theme">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="theme">
           <Toaster 
             position="top-right"
             toastOptions={{
@@ -49,7 +50,7 @@ export default function RootLayout({
           <WalletProvider>
             <ContractProvider>
               {/* Noise Overlay */}
-              <div className="pointer-events-none fixed inset-0 z-50 h-full w-full opacity-5 dark:mix-blend-overlay mix-blend-screen">
+              <div className="pointer-events-none fixed inset-0 z-40 h-full w-full opacity-[0.03] dark:mix-blend-overlay mix-blend-screen">
                 <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
                   <filter id="noiseFilter">
                     <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
@@ -57,6 +58,7 @@ export default function RootLayout({
                   <rect width="100%" height="100%" filter="url(#noiseFilter)" />
                 </svg>
               </div>
+              <Navbar />
               {children}
             </ContractProvider>
           </WalletProvider>
