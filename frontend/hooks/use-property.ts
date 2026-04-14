@@ -36,6 +36,8 @@ interface UsePropertyReturn {
   error: string | null;
   /** Last successful tx result */
   lastTx: TxResult | null;
+  /** True if contract adapters are ready */
+  isReady: boolean;
 }
 
 export function useProperty(): UsePropertyReturn {
@@ -145,5 +147,6 @@ export function useProperty(): UsePropertyReturn {
     isPending,
     error,
     lastTx,
+    isReady,
   };
 }

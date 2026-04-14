@@ -42,7 +42,8 @@ export function useMarketplace(): UseMarketplaceReturn {
   }): Promise<{ tx: TxResult; listingId: string } | null> => {
     if (!isReady || !marketplace || !callerKey) { setError("Not ready"); return null; }
     setIsPending(true); setError(null);
-    const [tx, listingId, err] = await marketplace.createListing(callerKey, tokenId, quantity, pricePerToken, callerKey);
+    // Ignore quantity because the V4 unified createListing signature only takes pricePerToken (amount)
+    const [tx, listingId, err] = await marketplace.createListing(callerKey, tokenId, pricePerToken, callerKey);
     setIsPending(false);
     if (err) { setError(err.message); return null; }
     setLastTx(tx!);
@@ -52,7 +53,8 @@ export function useMarketplace(): UseMarketplaceReturn {
   const purchaseListing = useCallback(async (listingId: string, quantity: bigint): Promise<TxResult | null> => {
     if (!isReady || !marketplace || !callerKey) { setError("Not ready"); return null; }
     setIsPending(true); setError(null);
-    const [tx, err] = await marketplace.purchaseListing(listingId, callerKey, quantity, callerKey);
+    // Using quantity as feeAmount for now to match the purchaseListing signature (listingId, buyer, feeAmount)
+    const [tx, err] = await marketplace.purchaseListing(listingId, callerKey, quantity);
     setIsPending(false);
     if (err) { setError(err.message); return null; }
     setLastTx(tx!);

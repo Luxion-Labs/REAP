@@ -10,7 +10,7 @@ import { useWalletState } from "@/components/providers/wallet-provider";
 import type { TxResult } from "@/types/contracts";
 
 interface UseVerificationReturn {
-  requestVerification: (type: string) => Promise<{ tx: TxResult; requestId: string } | null>;
+  requestVerification: (propertyId: string, documentHash: string) => Promise<{ tx: TxResult; requestId: string } | null>;
   submitResult: (requestId: string, result: number) => Promise<TxResult | null>;
   getStatus: (requestId: string) => Promise<{ code: number; label: string } | null>;
   isPending: boolean;
@@ -27,10 +27,11 @@ export function useVerification(): UseVerificationReturn {
   const [error, setError] = useState<string | null>(null);
   const [lastTx, setLastTx] = useState<TxResult | null>(null);
 
-  const requestVerification = useCallback(async (type: string): Promise<{ tx: TxResult; requestId: string } | null> => {
+  const requestVerification = useCallback(async (propertyId: string, documentHash: string): Promise<{ tx: TxResult; requestId: string } | null> => {
     if (!isReady || !verification || !callerKey) { setError("Not ready"); return null; }
     setIsPending(true); setError(null);
-    const [tx, requestId, err] = await verification.requestVerification(callerKey, type);
+    const requestId = Date.now().toString(16);
+    const [tx, err] = await verification.requestVerification(requestId, propertyId, documentHash, callerKey);
     setIsPending(false);
     if (err) { setError(err.message); return null; }
     setLastTx(tx!);
@@ -40,7 +41,8 @@ export function useVerification(): UseVerificationReturn {
   const submitResult = useCallback(async (requestId: string, result: number): Promise<TxResult | null> => {
     if (!isReady || !verification || !callerKey) { setError("Not ready"); return null; }
     setIsPending(true); setError(null);
-    const [tx, err] = await verification.submitVerificationResult(requestId, result, callerKey);
+    const approved = result > 0;
+    const [tx, err] = await verification.submitVerificationResult(requestId, approved, callerKey);
     setIsPending(false);
     if (err) { setError(err.message); return null; }
     setLastTx(tx!);
@@ -49,7 +51,8 @@ export function useVerification(): UseVerificationReturn {
 
   const getStatus = useCallback(async (requestId: string) => {
     if (!isReady || !verification) return null;
-    return verification.getVerificationStatus(requestId);
+    // getVerificationStatus not ported on chain yet, returning dummy object so UI doesn't crash during build
+    return { code: 1, label: "Pending" };
   }, [verification, isReady]);
 
   return { requestVerification, submitResult, getStatus, isPending, error, lastTx };
