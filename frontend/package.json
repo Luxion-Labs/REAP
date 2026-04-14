@@ -10,17 +10,17 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
-    "@meshsdk/core": "^1.9.0-beta.101",
+    "@meshsdk/core": "^1.8.14",
     "@meshsdk/midnight-setup": "^1.9.0-beta.98",
     "@midnight-ntwrk/dapp-connector-api": "^4.0.0",
-    "@midnight-ntwrk/ledger-v7": "^7.0.3",
-    "@midnight-ntwrk/midnight-js-contracts": "^4.0.2",
-    "@midnight-ntwrk/midnight-js-utils": "^4.0.2",
-    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-types": "^4.0.1",
+    "@midnight-ntwrk/ledger-v8": "^8.0.0",
+    "@midnight-ntwrk/midnight-js-contracts": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-utils": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-types": "^4.0.4",
     "@midnight-ntwrk/wallet-sdk-address-format": "^3.1.0",
     "@midnight-ntwrk/wallet-sdk-dust-wallet": "^3.0.0",
     "@midnight-ntwrk/wallet-sdk-facade": "^3.0.0",
@@ -83,8 +83,7 @@
     "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-types": "^4.0.1",
     "@midnight-ntwrk/compact-runtime": "0.15.0",
-    "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0",
-    "@midnight-ntwrk/compact-runtime/@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
+    "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
   },
   "resolutions": {
     "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
@@ -93,7 +92,6 @@
     "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
     "@midnight-ntwrk/midnight-js-types": "^4.0.1",
     "@midnight-ntwrk/compact-runtime": "0.15.0",
-    "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0",
-    "@midnight-ntwrk/compact-runtime/@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
+    "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
   }
 }
