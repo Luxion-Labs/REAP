@@ -77,20 +77,20 @@
     "typescript": "5.9.3"
   },
   "overrides": {
-    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-types": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-types": "^4.0.4",
     "@midnight-ntwrk/compact-runtime": "0.15.0",
     "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
   },
   "resolutions": {
-    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.1",
-    "@midnight-ntwrk/midnight-js-types": "^4.0.1",
+    "@midnight-ntwrk/midnight-js-fetch-zk-config-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-types": "^4.0.4",
     "@midnight-ntwrk/compact-runtime": "0.15.0",
     "@midnight-ntwrk/onchain-runtime": "npm:@midnight-ntwrk/onchain-runtime-v3@3.0.0"
   }
