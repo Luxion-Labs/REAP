@@ -30,7 +30,7 @@ import {
   isWalletInstalled,
   getPrimaryWalletProvider,
   handleMidnightError,
-} from "@/lib/midnight-utils";
+} from "@/lib/utils/midnight-utils";
 
 // ─── Wallet Configurations ──────────────────────────────────────────────────
 

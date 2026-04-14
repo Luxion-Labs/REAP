@@ -27,6 +27,7 @@ import React, {
 import { useWallet } from "@/components/providers/wallet-provider";
 import { buildREAPProviders, type REAPProvidersBundle } from "@/lib/midnight-providers";
 import {
+  REAPUnifiedAdapter,
   PropertyRegistryAdapter,
   FractionalTokenAdapter,
   MarketplaceAdapter,
@@ -41,7 +42,7 @@ import {
   CONTRACT_ADDRESSES,
   areContractsDeployed,
   getMissingContracts,
-} from "@/lib/contracts.config";
+} from "@/lib/utils/contracts.config";
 import type { ContractStateSnapshot } from "@/types/contracts";
 
 // ─── Context Type ─────────────────────────────────────────────────────────────
@@ -129,85 +130,45 @@ export function ContractProvider({ children }: { children: React.ReactNode }) {
       setBundle(providerBundle);
 
       const { providers } = providerBundle;
+      const unifiedAddress = CONTRACT_ADDRESSES.unified;
 
-      // Instantiate adapters for configured contracts only
-      const newAdapters: Partial<{
-        propertyRegistry: PropertyRegistryAdapter;
-        fractionalToken: FractionalTokenAdapter;
-        marketplace: MarketplaceAdapter;
-        escrow: EscrowAdapter;
-        verification: VerificationAdapter;
-        mainContract: MainContractAdapter;
-        auditLog: AuditLogAdapter;
-        role: RoleAdapter;
-        accessControl: AccessControlAdapter;
-      }> = {};
-
-      if (CONTRACT_ADDRESSES.propertyRegistry) {
-        const a = new PropertyRegistryAdapter(providers, CONTRACT_ADDRESSES.propertyRegistry!);
-        await a.connect();
-        newAdapters.propertyRegistry = a;
-      }
-      if (CONTRACT_ADDRESSES.fractionalToken) {
-        const a = new FractionalTokenAdapter(providers, CONTRACT_ADDRESSES.fractionalToken!);
-        await a.connect();
-        newAdapters.fractionalToken = a;
-      }
-      if (CONTRACT_ADDRESSES.marketplace) {
-        const a = new MarketplaceAdapter(providers, CONTRACT_ADDRESSES.marketplace!);
-        await a.connect();
-        newAdapters.marketplace = a;
-      }
-      if (CONTRACT_ADDRESSES.escrow) {
-        const a = new EscrowAdapter(providers, CONTRACT_ADDRESSES.escrow!);
-        await a.connect();
-        newAdapters.escrow = a;
-      }
-      if (CONTRACT_ADDRESSES.verification) {
-        const a = new VerificationAdapter(providers, CONTRACT_ADDRESSES.verification!);
-        await a.connect();
-        newAdapters.verification = a;
-      }
-      if (CONTRACT_ADDRESSES.main) {
-        const a = new MainContractAdapter(providers, CONTRACT_ADDRESSES.main!);
-        await a.connect();
-        newAdapters.mainContract = a;
-      }
-      if (CONTRACT_ADDRESSES.auditLog) {
-        const a = new AuditLogAdapter(providers, CONTRACT_ADDRESSES.auditLog!);
-        await a.connect();
-        newAdapters.auditLog = a;
-      }
-      if (CONTRACT_ADDRESSES.role) {
-        const a = new RoleAdapter(providers, CONTRACT_ADDRESSES.role!);
-        await a.connect();
-        newAdapters.role = a;
-      }
-      if (CONTRACT_ADDRESSES.accessControl) {
-        const a = new AccessControlAdapter(providers, CONTRACT_ADDRESSES.accessControl!);
-        await a.connect();
-        newAdapters.accessControl = a;
+      if (!unifiedAddress) {
+        throw new Error("UNIFIED contract address missing from environment!");
       }
 
-      setPropertyRegistry(newAdapters.propertyRegistry ?? null);
-      setFractionalToken(newAdapters.fractionalToken ?? null);
-      setMarketplace(newAdapters.marketplace ?? null);
-      setEscrow(newAdapters.escrow ?? null);
-      setVerification(newAdapters.verification ?? null);
-      setMainContract(newAdapters.mainContract ?? null);
-      setAuditLog(newAdapters.auditLog ?? null);
-      setRole(newAdapters.role ?? null);
-      setAccessControl(newAdapters.accessControl ?? null);
+      // 1. Initialize Unified Adapter
+      const unified = new REAPUnifiedAdapter(providers, unifiedAddress);
+      await unified.connect();
+
+      // 2. Instantiate all sub-adapters using the same unified instance
+      const pReg = new PropertyRegistryAdapter(providers, unifiedAddress, unified.deployed);
+      const fTok = new FractionalTokenAdapter(providers, unifiedAddress, unified.deployed);
+      const mkt = new MarketplaceAdapter(providers, unifiedAddress, unified.deployed);
+      const esc = new EscrowAdapter(providers, unifiedAddress, unified.deployed);
+      const ver = new VerificationAdapter(providers, unifiedAddress, unified.deployed);
+      const main = new MainContractAdapter(providers, unifiedAddress, unified.deployed);
+      const audit = new AuditLogAdapter(providers, unifiedAddress, unified.deployed);
+      const role = new RoleAdapter(providers, unifiedAddress, unified.deployed);
+      const acc = new AccessControlAdapter(providers, unifiedAddress, unified.deployed);
+
+      setPropertyRegistry(pReg);
+      setFractionalToken(fTok);
+      setMarketplace(mkt);
+      setEscrow(esc);
+      setVerification(ver);
+      setMainContract(main);
+      setAuditLog(audit);
+      setRole(role);
+      setAccessControl(acc);
+
       setIsReady(true);
 
       // Load initial snapshot
-      if (newAdapters.mainContract) {
-        try {
-          const snapshot = await newAdapters.mainContract.getSystemSnapshot();
-          setSystemSnapshot(snapshot);
-        } catch {
-          // Non-fatal: snapshot load failure
-        }
+      try {
+        const snapshot = await main.getSystemSnapshot();
+        setSystemSnapshot(snapshot);
+      } catch (err) {
+        console.warn("[ContractProvider] Snapshot load failed:", err);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
