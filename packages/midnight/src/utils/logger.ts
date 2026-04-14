@@ -23,7 +23,7 @@ export const logger = pino(
     base: undefined,
   },
   pino.multistream([
-    { stream: pretty, level: 'info' },
+    { stream: pretty, level: (process.env.LOG_LEVEL || 'info') as any },
     { stream: pino.destination({ dest: logPath, sync: true }), level: 'debug' },
   ])
 );

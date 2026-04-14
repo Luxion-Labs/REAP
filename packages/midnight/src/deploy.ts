@@ -36,41 +36,67 @@ async function main() {
     console.log('  2) preview    - Early development');
     console.log('  3) preprod    - Pre-production staging\n');
 
-    const choice = await rl.question('Select network [1-undeployed]: ');
+    const networkChoices = ['1', '2', '3', 'undeployed', 'preview', 'preprod'];
+    let choice = await rl.question('Select network [1-undeployed]: ');
+    if (!choice.trim()) choice = '1';
+
+    while (!networkChoices.includes(choice.trim().toLowerCase())) {
+      console.log(`❌ Invalid choice "${choice}". Please choose 1, 2, or 3.`);
+      choice = await rl.question('Select network [1-undeployed]: ');
+      if (!choice.trim()) choice = '1';
+    }
     
     // FIX #1: Map user choice to appropriate config class
     let config: Config;
     let selectedNetwork: string;
     
-    switch (choice?.trim() || '1') {
-      case '2':
-      case 'preview':
-        config = new PreviewConfig();
-        selectedNetwork = 'preview';
-        break;
-      case '3':
-      case 'preprod':
-        config = new PreprodConfig();
-        selectedNetwork = 'preprod';
-        break;
-      case '1':
-      case 'undeployed':
-      default:
-        config = new StandaloneConfig();
-        selectedNetwork = 'undeployed';
+    const normalizedChoice = choice.trim().toLowerCase();
+    if (normalizedChoice === '2' || normalizedChoice === 'preview') {
+      config = new PreviewConfig();
+      selectedNetwork = 'preview';
+    } else if (normalizedChoice === '3' || normalizedChoice === 'preprod') {
+      config = new PreprodConfig();
+      selectedNetwork = 'preprod';
+    } else {
+      config = new StandaloneConfig();
+      selectedNetwork = 'undeployed';
     }
     
     logger.info(`Deploying to: ${selectedNetwork} (networkId: ${config.networkId})`);
 
     // --- Wallet Setup ---
-    let seedAnswer = await rl.question('💼 Use existing seed? (y/n) [default: n]: ');
     let seed: string;
-    if (seedAnswer.toLowerCase() === 'y') {
-      seed = await rl.question('Enter seed: ');
-    } else {
-      const newSeed = generateWalletSeed();
-      console.log(`\n🆕 SAVE THIS SEED: ${newSeed}\n`);
-      seed = newSeed;
+    const isHexSeed = (s: string) => /^[0-9a-fA-F]{64}$/.test(s.trim());
+
+    while (true) {
+      let seedAnswer = await rl.question('💼 Use existing seed? (y/n/SEED) [default: n]: ');
+      const input = seedAnswer.trim();
+
+      if (!input || input.toLowerCase() === 'n') {
+        const newSeed = generateWalletSeed();
+        console.log(`\n🆕 SAVE THIS SEED: ${newSeed}\n`);
+        seed = newSeed;
+        break;
+      }
+
+      if (isHexSeed(input)) {
+        seed = input;
+        logger.info('Detected hex seed from input, using it.');
+        break;
+      }
+
+      if (input.toLowerCase() === 'y') {
+        const providedSeed = await rl.question('Enter 64-char hex seed: ');
+        if (isHexSeed(providedSeed)) {
+          seed = providedSeed.trim();
+          break;
+        } else {
+          console.log('❌ Invalid seed format. Must be 64-character hex.');
+          continue;
+        }
+      }
+
+      console.log('❌ Invalid input. Please enter "y", "n", or a 64-char hex seed.');
     }
 
     logger.info('Building wallet...');
