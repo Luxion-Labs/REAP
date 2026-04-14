@@ -4,12 +4,12 @@
  */
 import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
 import type { REAPProviders } from '@/lib/midnight-providers';
-import { withContractCall, extractTxInfo } from '@/lib/contract-errors';
+import { withContractCall, extractTxInfo } from '@/lib/utils/contract-errors';
 import {
   stringToBytes32,
   coinPublicKeyToBytes32,
   tokenStateLabel,
-} from '@/lib/contract-encoding';
+} from '@/lib/utils/contract-encoding';
 import type { TokenInfo, TxResult } from '@/types/contracts';
 
 interface FractionalTokenPrivateState { }
@@ -21,20 +21,25 @@ export class FractionalTokenAdapter {
   constructor(
     private readonly providers: REAPProviders,
     private readonly contractAddress: string,
-  ) { }
+    private unifiedInstance?: any,
+  ) { 
+    if (unifiedInstance) {
+      this.deployed = unifiedInstance;
+    }
+  }
 
   async connect(): Promise<void> {
     if (this.deployed) return;
 
     // @ts-ignore
-    const contractModule = await import(/* webpackIgnore: true */ '/contracts/fractional_token/contract/index.js');
+    const contractModule = await import(/* webpackIgnore: true */ '/contracts/REAP/contract/index.js');
 
     // @ts-ignore
     this.deployed = await findDeployedContract(this.providers as any, {
       contractAddress: this.contractAddress,
       // @ts-ignore
       compiledContract: contractModule.compiledContract ?? contractModule,
-      privateStateId: PRIVATE_STATE_ID,
+      privateStateId: 'reapState',
       initialPrivateState: {} as FractionalTokenPrivateState,
     });
   }
@@ -61,7 +66,7 @@ export class FractionalTokenAdapter {
   ): Promise<[TxResult | null, any]> {
     this.ensureConnected();
     const [tx, err] = await withContractCall(
-      () => this.deployed.callTx.mint(toCoinPublicKey, amount, coinPublicKeyToBytes32(callerCoinPublicKey)),
+      () => this.deployed.callTx.mint(coinPublicKeyToBytes32(toCoinPublicKey), amount as any, coinPublicKeyToBytes32(callerCoinPublicKey)),
       'mint',
     );
     if (err) return [null, err];
@@ -75,7 +80,7 @@ export class FractionalTokenAdapter {
   ): Promise<[TxResult | null, any]> {
     this.ensureConnected();
     const [tx, err] = await withContractCall(
-      () => this.deployed.callTx.burn(senderCoinPublicKey, amount, coinPublicKeyToBytes32(callerCoinPublicKey)),
+      () => this.deployed.callTx.burn(coinPublicKeyToBytes32(senderCoinPublicKey), amount as any, coinPublicKeyToBytes32(callerCoinPublicKey)),
       'burn',
     );
     if (err) return [null, err];
@@ -90,7 +95,7 @@ export class FractionalTokenAdapter {
   ): Promise<[TxResult | null, any]> {
     this.ensureConnected();
     const [tx, err] = await withContractCall(
-      () => this.deployed.callTx.transfer(senderCoinPublicKey, toCoinPublicKey, amount, coinPublicKeyToBytes32(callerCoinPublicKey)),
+      () => this.deployed.callTx.transfer(coinPublicKeyToBytes32(senderCoinPublicKey), coinPublicKeyToBytes32(toCoinPublicKey), amount as any, coinPublicKeyToBytes32(callerCoinPublicKey)),
       'transfer',
     );
     if (err) return [null, err];
@@ -105,7 +110,7 @@ export class FractionalTokenAdapter {
   ): Promise<[TxResult | null, any]> {
     this.ensureConnected();
     const [tx, err] = await withContractCall(
-      () => this.deployed.callTx.approve(ownerCoinPublicKey, spenderCoinPublicKey, amount, coinPublicKeyToBytes32(callerCoinPublicKey)),
+      () => this.deployed.callTx.approve(coinPublicKeyToBytes32(ownerCoinPublicKey), coinPublicKeyToBytes32(spenderCoinPublicKey), amount as any, coinPublicKeyToBytes32(callerCoinPublicKey)),
       'approve',
     );
     if (err) return [null, err];
@@ -115,42 +120,58 @@ export class FractionalTokenAdapter {
   async balanceOf(holderCoinPublicKey: string): Promise<bigint | null> {
     this.ensureConnected();
     const [result, err] = await withContractCall(
-      () => this.deployed.callTx.balanceOf(holderCoinPublicKey),
+      () => this.deployed.callTx.balanceOf(coinPublicKeyToBytes32(holderCoinPublicKey)),
       'balanceOf',
     );
     if (err) return null;
-    return result as bigint;
+    return (result as any).private.result as bigint;
   }
 
   async getTokenInfo(): Promise<TokenInfo | null> {
     this.ensureConnected();
     const [
-      [totalSupply],
-      [circulatingSupply],
-      [stateCode],
+      totalSupplyResult,
+      circulatingSupplyResult,
+      stateCodeResult,
     ] = await Promise.all([
       withContractCall(() => this.deployed.callTx.getTotalSupply(), 'getTotalSupply'),
       withContractCall(() => this.deployed.callTx.getCirculatingSupply(), 'getCirculatingSupply'),
       withContractCall(() => this.deployed.callTx.getTokenState(), 'getTokenState'),
     ]);
-    if (totalSupply == null) return null;
+    
+    if (totalSupplyResult[0] == null) return null;
+
+    const totalSupply = (totalSupplyResult[0] as any).private.result as bigint;
+    const circulatingSupply = (circulatingSupplyResult[0] as any)?.private?.result as bigint ?? BigInt(0);
+    const stateCode = (stateCodeResult[0] as any)?.private?.result as number ?? 0;
+
     return {
-      totalSupply: totalSupply as bigint,
-      circulatingSupply: (circulatingSupply as bigint | null) ?? BigInt(0),
-      state: (stateCode as number | null) ?? (0 as any),
-      stateLabel: tokenStateLabel((stateCode as number | null) ?? (0 as any)),
+      totalSupply: totalSupply,
+      circulatingSupply: circulatingSupply,
+      state: stateCode as any,
+      stateLabel: tokenStateLabel(stateCode as any),
     };
   }
 
-  async registerProperty(
-    propertyId: string,
-    ownerCoinPublicKey: string,
+  async pauseToken(
     callerCoinPublicKey: string,
   ): Promise<[TxResult | null, any]> {
     this.ensureConnected();
     const [tx, err] = await withContractCall(
-      () => this.deployed.callTx.register_property(stringToBytes32(propertyId), ownerCoinPublicKey, coinPublicKeyToBytes32(callerCoinPublicKey)),
-      'register_property',
+      () => this.deployed.callTx.pause_token(coinPublicKeyToBytes32(callerCoinPublicKey)),
+      'pause_token',
+    );
+    if (err) return [null, err];
+    return [extractTxInfo(tx, this.contractAddress), null];
+  }
+
+  async unpauseToken(
+    callerCoinPublicKey: string,
+  ): Promise<[TxResult | null, any]> {
+    this.ensureConnected();
+    const [tx, err] = await withContractCall(
+      () => this.deployed.callTx.unpause_token(coinPublicKeyToBytes32(callerCoinPublicKey)),
+      'unpause_token',
     );
     if (err) return [null, err];
     return [extractTxInfo(tx, this.contractAddress), null];

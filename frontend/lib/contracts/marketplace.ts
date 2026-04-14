@@ -4,13 +4,13 @@
  */
 import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
 import type { REAPProviders } from '@/lib/midnight-providers';
-import { withContractCall, extractTxInfo } from '@/lib/contract-errors';
+import { withContractCall, extractTxInfo } from '@/lib/utils/contract-errors';
 import {
   stringToBytes32,
   coinPublicKeyToBytes32,
   listingStatusLabel,
   generateId,
-} from '@/lib/contract-encoding';
+} from '@/lib/utils/contract-encoding';
 import type { MarketplaceListing, TxResult } from '@/types/contracts';
 
 interface MarketplacePrivateState {}
@@ -22,20 +22,25 @@ export class MarketplaceAdapter {
   constructor(
     private readonly providers: REAPProviders,
     private readonly contractAddress: string,
-  ) {}
+    private unifiedInstance?: any,
+  ) {
+    if (unifiedInstance) {
+      this.deployed = unifiedInstance;
+    }
+  }
 
   async connect(): Promise<void> {
     if (this.deployed) return;
     
     // @ts-ignore
-    const contractModule = await import(/* webpackIgnore: true */ '/contracts/marketplace/contract/index.js');
+    const contractModule = await import(/* webpackIgnore: true */ '/contracts/REAP/contract/index.js');
     
     // @ts-ignore
     this.deployed = await findDeployedContract(this.providers as any, {
       contractAddress: this.contractAddress,
       // @ts-ignore
       compiledContract: contractModule.compiledContract ?? contractModule,
-      privateStateId: PRIVATE_STATE_ID,
+      privateStateId: 'reapState',
       initialPrivateState: {} as MarketplacePrivateState,
     });
   }
@@ -47,21 +52,23 @@ export class MarketplaceAdapter {
   async createListing(
     sellerCoinPublicKey: string,
     tokenId: string,
-    quantity: bigint,
     pricePerToken: bigint,
     callerCoinPublicKey: string,
     listingId?: string,
   ): Promise<[TxResult | null, string, any]> {
     this.ensureConnected();
     const id = listingId ?? generateId();
+    const duration = BigInt(86400 * 30); // 30 days
+    const timestamp = BigInt(Math.floor(Date.now() / 1000));
+
     const [tx, err] = await withContractCall(
       () => this.deployed.callTx.createListing(
         stringToBytes32(id),
-        sellerCoinPublicKey,
         stringToBytes32(tokenId),
-        quantity,
         pricePerToken,
-        coinPublicKeyToBytes32(callerCoinPublicKey),
+        duration,
+        timestamp,
+        coinPublicKeyToBytes32(sellerCoinPublicKey), // Seller ID
       ),
       'createListing',
     );
@@ -72,16 +79,14 @@ export class MarketplaceAdapter {
   async purchaseListing(
     listingId: string,
     buyerCoinPublicKey: string,
-    quantity: bigint,
-    callerCoinPublicKey: string,
+    feeAmount: bigint,
   ): Promise<[TxResult | null, any]> {
     this.ensureConnected();
     const [tx, err] = await withContractCall(
       () => this.deployed.callTx.purchaseListing(
         stringToBytes32(listingId),
-        buyerCoinPublicKey,
-        quantity,
-        coinPublicKeyToBytes32(callerCoinPublicKey),
+        coinPublicKeyToBytes32(buyerCoinPublicKey),
+        feeAmount,
       ),
       'purchaseListing',
     );

@@ -6,6 +6,7 @@
  *   import { PropertyRegistryAdapter, FractionalTokenAdapter } from '@/lib/contracts';
  */
 
+export { REAPUnifiedAdapter } from './unified';
 export { PropertyRegistryAdapter } from './property';
 export { FractionalTokenAdapter } from './tokens';
 export { MarketplaceAdapter } from './marketplace';
