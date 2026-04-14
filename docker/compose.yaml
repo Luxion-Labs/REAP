@@ -2,7 +2,7 @@ name: reap
 
 services:
   api:
-    profiles: ["app-layer"]
+    profiles: [ "app-layer" ]
     build:
       context: ../packages/api
       dockerfile: Dockerfile
@@ -14,13 +14,13 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
   redis:
-    profiles: ["app-layer"]
+    profiles: [ "app-layer" ]
     image: redis:7-alpine
     ports:
       - "127.0.0.1:6379:6379"
 
   ipfs:
-    profiles: ["app-layer"]
+    profiles: [ "app-layer" ]
     image: ipfs/kubo:latest
     ports:
       - "5001:5001"
@@ -31,41 +31,50 @@ services:
 
   indexer:
     container_name: 'reap-indexer'
-    image: 'midnightntwrk/indexer-standalone:3.0.0'
+    image: 'midnightntwrk/indexer-standalone:4.0.0'
     ports:
       - '8088:8088'
     environment:
       RUST_LOG: "indexer=info,chain_indexer=info,indexer_api=info,wallet_indexer=info,indexer_common=info,fastrace_opentelemetry=off,info"
       APP__INFRA__SECRET: "303132333435363738393031323334353637383930313233343536373839303132"
       APP__INFRA__NODE__URL: "ws://node:9944"
+    depends_on:
+      node:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8088/api/v1/graphql"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8088/api/v3/graphql" ]
       interval: 5s
       timeout: 10s
       retries: 5
       start_period: 30s
 
   node:
-    image: 'midnightntwrk/midnight-node:0.20.0'
+    image: 'midnightntwrk/midnight-node:0.22.3'
     container_name: 'reap-node'
     ports:
       - "9944:9944"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9944/health" ]
-      interval: 2s
-      timeout: 5s
-      retries: 5
-      start_period: 40s
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
     environment:
       CFG_PRESET: "dev"
 
   proof-server:
     container_name: 'reap-proof-server'
-    image: "midnightntwrk/proof-server:7.0.0"
+    image: "midnightntwrk/proof-server:8.0.3"
     ports:
       - "6300:6300"
     environment:
       RUST_BACKTRACE: "full"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6300" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
 
 volumes:
   pdfdb:
