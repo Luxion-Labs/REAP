@@ -87,6 +87,11 @@ export default function FinalCTASection() {
             )}
           </AnimatePresence>
         </form>
+        <div className="mt-8 flex justify-center">
+          <a href="/demo" className="px-12 py-5 w-full max-w-xl rounded-2xl font-mono text-xs font-bold uppercase tracking-widest demo-glass-btn hover:scale-[1.01] active:scale-[0.99] transition-all text-center">
+            Try Demo
+          </a>
+        </div>
       </motion.div>
     </section>
   );
