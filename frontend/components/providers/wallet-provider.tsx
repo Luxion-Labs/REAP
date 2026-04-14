@@ -262,24 +262,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [connectedApi, fetchWalletData]);
 
-  // ── Auto-reconnect ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      sessionStorage.getItem("midnight_wallet_connected") === "true" &&
-      !state.isConnected &&
-      !isAutoConnecting.current
-    ) {
-      isAutoConnecting.current = true;
-      connectWallet()
-        .catch(() => {
-          sessionStorage.removeItem("midnight_wallet_connected");
-        })
-        .finally(() => {
-          isAutoConnecting.current = false;
-        });
-    }
-  }, [connectWallet, state.isConnected]);
+  // Auto-reconnect disabled to ensure connection only happens on explicit user click
+  // as requested for the demo flow control.
+
 
   // ── Context value ──────────────────────────────────────────────────────
   const contextValue: WalletContextType = {
