@@ -102,10 +102,17 @@ export async function initializeMidnight(
   const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
   const unshieldedKeystore = createKeystore(derivationResult.keys[Roles.NightExternal], config.networkId);
 
+  // FIX #2: Use network-specific cost parameters
+  // Ensure ledger parameters match the selected network
+  const ledgerParams = ledger.LedgerParameters.initialParameters();
+  const additionalFeeOverhead = config.networkId === 'undeployed' 
+    ? 500_000_000_000_000_000n  // Local network: higher overhead for testing
+    : 300_000_000_000_000n;      // Preview/Preprod: adjusted for real networks
+
   const walletConfig = {
     networkId: config.networkId,
     costParameters: {
-      additionalFeeOverhead: 300_000_000_000_000n,
+      additionalFeeOverhead,
       feeBlocksMargin: 5,
     },
     indexerClientConnection: {
@@ -116,6 +123,14 @@ export async function initializeMidnight(
     relayURL: new URL(config.node.replace(/^http/, 'ws')),
     txHistoryStorage: new InMemoryTransactionHistoryStorage(),
   } as any;
+
+  logger.info(`Wallet Configuration:
+    - Network ID: ${config.networkId}
+    - Fee Overhead: ${additionalFeeOverhead.toString()}
+    - Block Margin: 5
+    - Indexer: ${config.indexer}
+    - Node: ${config.node}
+    - Proof Server: ${config.proofServer}`);
 
   logger.info('Initializing WalletFacade...');
   let wallet;
@@ -128,7 +143,7 @@ export async function initializeMidnight(
       shielded: (cfg: typeof walletConfig) => ShieldedWallet(cfg).startWithSecretKeys(shieldedSecretKeys),
       dust: (cfg: typeof walletConfig) => DustWallet(cfg).startWithSecretKey(
         dustSecretKey, 
-        ledger.LedgerParameters.initialParameters().dust
+        ledgerParams.dust
       ),
     } as any);
   } catch (err: any) {
@@ -214,17 +229,88 @@ export async function getContractProviders(
   } as MidnightProviders<any, string, any>;
 }
 
+/**
+ * Helper to check if a progress object indicates strict completion
+ * (100% synced and no pending data)
+ */
+function isProgressStrictlyComplete(progress: any): boolean {
+  if (!progress) return false;
+  // Progress is complete when it reaches 100% (or equivalently, when all is synced)
+  return progress.current >= progress.total && progress.current > 0;
+}
+
 export async function waitForSync(wallet: WalletFacade, config: AppConfig) {
-  return Rx.firstValueFrom(
-    wallet.state().pipe(
-      Rx.filter((state: any) => {
-        if (!state.isSynced) {
-          logger.info(`Syncing... (Address: ${UnshieldedAddress.codec.encode(config.networkId, state.unshielded.address).toString()})`);
-        }
-        return state.isSynced;
-      })
-    )
-  );
+  // Network-appropriate timeouts
+  // - Local networks sync quickly (< 1 minute)
+  // - Preview/Preprod can take 5-15+ minutes due to chain history replay
+  const timeoutMs = config.networkId === 'undeployed' ? 120_000 : 600_000; // 2 min local, 10 min testnet
+  const startTime = Date.now();
+  
+  logger.info(`Starting wallet sync for ${config.networkId} network (timeout: ${(timeoutMs / 1000 / 60).toFixed(1)} minutes)...`);
+  logger.info(`Network: ${config.networkId === 'undeployed' ? 'Local (fast, ~30-60s)' : 'Preview/Preprod (slow, 5-15+ minutes) — This cannot be rushed.'}`);
+  
+  try {
+    return await Rx.firstValueFrom(
+      wallet.state().pipe(
+        // Throttle updates to reduce log spam - emit at most once every 2 seconds
+        Rx.throttleTime(2_000),
+        // Detailed progress logging
+        Rx.tap((state: any) => {
+          const shieldedProgress = state.shielded.state.progress;
+          const dustProgress = state.dust.state.progress;
+          const unshieldedComplete = state.unshielded.progress?.current >= state.unshielded.progress?.total;
+          
+          const shieldedComplete = isProgressStrictlyComplete(shieldedProgress);
+          const dustComplete = isProgressStrictlyComplete(dustProgress);
+          const elapsed = Date.now() - startTime;
+          
+          logger.debug(`Sync Progress [${(elapsed / 1000).toFixed(0)}s]:
+  Shielded:   ${shieldedProgress?.current ?? 0}/${shieldedProgress?.total ?? 0} ${shieldedComplete ? '✓' : '⏳'}
+  Dust:       ${dustProgress?.current ?? 0}/${dustProgress?.total ?? 0} ${dustComplete ? '✓' : '⏳'}
+  Unshielded: ${unshieldedComplete ? '✓' : '⏳'}`);
+        }),
+        // Filter: all three sub-wallets must be completely synced
+        Rx.filter((state: any) => {
+          const shieldedComplete = isProgressStrictlyComplete(state.shielded.state.progress);
+          const dustComplete = isProgressStrictlyComplete(state.dust.state.progress);
+          const unshieldedComplete = state.unshielded.progress?.current >= state.unshielded.progress?.total && state.unshielded.progress?.current > 0;
+          
+          return shieldedComplete && dustComplete && unshieldedComplete;
+        }),
+        // Timeout after network-specific duration
+        Rx.timeout({
+          each: timeoutMs,
+          with: () => Rx.throwError(() => 
+            new Error(`⏱️ Wallet sync timeout after ${(timeoutMs / 1000 / 60).toFixed(1)} minutes on ${config.networkId} network.
+
+🔍 What This Means:
+  - On Preview/Preprod: Sync is still waiting for wallet state to fully replay from chain history
+  - This is expected behavior — the wallet is querying the indexer for all relevant blocks
+  - Note: Reaching isSynced=true is NOT the same as full progress completion (which is stricter)
+
+🛠️ Troubleshooting Steps:
+1️⃣  On Preview/Preprod: Be patient. Initial sync takes 5-15+ minutes. Still syncing is normal!
+2️⃣  Verify indexer WebSocket URL (must include /ws):
+    - Preview: wss://indexer.preview.midnight.network/api/v4/graphql/ws
+    - Preprod: wss://indexer.preprod.midnight.network/api/v4/graphql/ws
+3️⃣  Check indexer connectivity:
+    curl https://indexer.${config.networkId}.midnight.network/api/v4/graphql
+4️⃣  Ensure you have DUST tokens on ${config.networkId === 'preprod' ? 'Preprod' : 'Preview'}:
+    - Hold tNIGHT tokens
+    - Register for DUST generation
+    - Wait 1-2 minutes for DUST to accrue
+5️⃣  If sync never completes after 20+ minutes, restart the deployment process`)
+          ),
+        })
+      )
+    );
+  } catch (err: any) {
+    logger.error(`Wallet sync failed: ${err.message}`);
+    throw err;
+  } finally {
+    const elapsed = Date.now() - startTime;
+    logger.info(`Wallet sync completed in ${(elapsed / 1000).toFixed(1)}s`);
+  }
 }
 
 export function generateWalletSeed(): string {

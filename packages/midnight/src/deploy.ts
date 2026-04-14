@@ -4,7 +4,13 @@ import {
   waitForSync,
   generateWalletSeed 
 } from './utils/midnight.js';
-import { StandaloneConfig, contractConfig } from './config/config.js';
+import { 
+  StandaloneConfig, 
+  PreviewConfig, 
+  PreprodConfig, 
+  contractConfig,
+  type Config 
+} from './config/config.js';
 import { deployContract } from '@midnight-ntwrk/midnight-js/contracts';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import { Contract } from '../build/REAP/contract/index.js';
@@ -16,6 +22,9 @@ import { stdin as input, stdout as output } from 'node:process';
 
 /**
  * 🚀 REAP Modern Orchestration Layer (v4.0.4)
+ * 
+ * FIXED: Network ID is now dynamically selected based on user input
+ * to avoid hardcoded 'undeployed' networkId regardless of selection.
  */
 
 async function main() {
@@ -28,9 +37,30 @@ async function main() {
     console.log('  3) preprod    - Pre-production staging\n');
 
     const choice = await rl.question('Select network [1-undeployed]: ');
-    const config = new StandaloneConfig(); // Default for now
     
-    logger.info(`Deploying to: ${choice || 'undeployed'}`);
+    // FIX #1: Map user choice to appropriate config class
+    let config: Config;
+    let selectedNetwork: string;
+    
+    switch (choice?.trim() || '1') {
+      case '2':
+      case 'preview':
+        config = new PreviewConfig();
+        selectedNetwork = 'preview';
+        break;
+      case '3':
+      case 'preprod':
+        config = new PreprodConfig();
+        selectedNetwork = 'preprod';
+        break;
+      case '1':
+      case 'undeployed':
+      default:
+        config = new StandaloneConfig();
+        selectedNetwork = 'undeployed';
+    }
+    
+    logger.info(`Deploying to: ${selectedNetwork} (networkId: ${config.networkId})`);
 
     // --- Wallet Setup ---
     let seedAnswer = await rl.question('💼 Use existing seed? (y/n) [default: n]: ');
@@ -46,9 +76,17 @@ async function main() {
     logger.info('Building wallet...');
     const { wallet, providers: bridgeProviders } = await initializeMidnight(config, seed);
     
+    // Network-specific guidance
+    if (selectedNetwork !== 'undeployed') {
+      console.log(`\n⏳ Network: ${selectedNetwork.toUpperCase()}`);
+      console.log('   Initial sync is slower on testnet—this can take 5-15+ minutes.');
+      console.log('   The wallet is syncing all relevant blocks from chain history.');
+      console.log('   ⚠️  If you\'re on Preprod, ensure you have DUST tokens before deploying.\n');
+    }
+    
     logger.info('Waiting for wallet sync...');
     await waitForSync(wallet, config);
-    logger.info('Wallet synced! Ready to deploy.');
+    logger.info('✅ Wallet synced! Ready to deploy.');
 
     // --- Contract Deployment ---
     logger.info('Preparing REAP contract...');
@@ -77,7 +115,7 @@ async function main() {
 
     // --- Save Deployment Info ---
     const deploymentData = {
-      network: choice || 'undeployed',
+      network: selectedNetwork,
       address: deployed.deployTxData.public.contractAddress,
       timestamp: new Date().toISOString(),
     };
