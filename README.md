@@ -89,6 +89,10 @@ We aim to transition from a functional prototype to a **production-grade fullsta
 **Problem:**  
  Traditional real estate transactions are slow, opaque, and exclusionary. Ownership verification requires paperwork, middlemen, and trust-heavy intermediaries.
 
+<details>
+<summary><b>Expand **2️⃣ Problem & Vision** Details</b></summary>
+<br/>
+
 **Vision:**  
  To build a **privacy-first, decentralized property exchange** where:
 
@@ -100,9 +104,16 @@ We aim to transition from a functional prototype to a **production-grade fullsta
 
 ---
 
+<br/>
+</details>
+
 ## **3️⃣ User Personas & Use Cases**
 
 ### **Investor**
+
+<details>
+<summary><b>Expand **3️⃣ User Personas & Use Cases** Details</b></summary>
+<br/>
 
 * Wants to buy fractional shares of verified properties securely.
 
@@ -129,6 +140,9 @@ We aim to transition from a functional prototype to a **production-grade fullsta
 4. Verify ownership via selective disclosure (ZKP).
 
 ---
+
+<br/>
+</details>
 
 ## **4️⃣ Core Features (Current)**
 
@@ -203,7 +217,14 @@ We aim to transition from a functional prototype to a **production-grade fullsta
 | **Performance** | \< 3s average TX response (local testnet) |
 | **Team Velocity** | 90% planned tasks completed within sprint time |
 
+<details>
+<summary><b>Expand **8️⃣ Metrics of Success** Details</b></summary>
+<br/>
+
 ---
+
+<br/>
+</details>
 
 ## **9️⃣ Deliverables (End of 9 Weeks)**
 
@@ -223,6 +244,3 @@ We aim to transition from a functional prototype to a **production-grade fullsta
 
 ## Maintainer Response SLA
 Luxion Labs enforces a strict 24-hour response SLA on all community issues, feature proposals, and pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md) for full development guidelines.
-
-## License
-Distributed under the MIT License. See [LICENSE](LICENSE) for details.
